@@ -24,6 +24,8 @@ htmlcov/
 data/raw/*
 data/processed/*
 data/results/*
+# Keep for tracking purposes (should be unchanged)
+!data/results/leaderboard_baseline.csv 
 
 # Keep the directory structure
 !data/raw/.gitkeep
