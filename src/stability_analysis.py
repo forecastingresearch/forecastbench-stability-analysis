@@ -327,29 +327,48 @@ def get_diff_adj_brier(
     return df
 
 
-def get_leaderboard(
+def compute_diff_adj_scores(
     df: pd.DataFrame, max_days_since_release: int, drop_baseline_models: list
 ):
+    """Compute diff-adj Brier scores for all questions"""
     df = df.copy()
 
-    # Create a dataframe for final results
+    # Process market and dataset questions separately
+    mask = df["market_question"]
+
+    # Market questions
+    df_market = get_diff_adj_brier(
+        df=df[mask],
+        max_days_since_release=max_days_since_release,
+        drop_baseline_models=drop_baseline_models,
+    )
+
+    # Dataset questions
+    df_dataset = get_diff_adj_brier(
+        df=df[~mask],
+        max_days_since_release=max_days_since_release,
+        drop_baseline_models=drop_baseline_models,
+    )
+
+    # Combine back
+    df_combined = pd.concat([df_market, df_dataset], ignore_index=True)
+
+    return df_combined
+
+
+def create_leaderboard(df_with_scores: pd.DataFrame):
+    """Aggregate diff-adj scores into leaderboard"""
+    df = df_with_scores.copy()
+
+    # Create base dataframe
     df_res = pd.DataFrame({"model": df["model"].unique()})
 
-    # Estimate separately for market & dataset questions
-    mask = df["market_question"]
-    config = {"market": df[mask], "dataset": df[~mask]}
+    # Aggregate by question type
+    for name, mask_val in [("market", True), ("dataset", False)]:
+        df_subset = df[df["market_question"] == mask_val]
 
-    # Loop over question types
-    for name, df_temp in config.items():
-        df_diff_adj = get_diff_adj_brier(
-            df=df_temp,
-            max_days_since_release=max_days_since_release,
-            drop_baseline_models=drop_baseline_models,
-        )
-
-        # Aggregate both mean and count
         df_agg = (
-            df_diff_adj.groupby("model")["diff_adj_brier_score"]
+            df_subset.groupby("model")["diff_adj_brier_score"]
             .agg([("diff_adj_brier_score", "mean"), ("n_forecasts", "count")])
             .reset_index()
         )
@@ -363,15 +382,15 @@ def get_leaderboard(
 
         df_res = pd.merge(df_res, df_agg, on="model", how="left")
 
-    # Adjust scores so that the score for "Always 0.5" is 0.25
-    for name in config.keys():
+    # Normalize to "Always 0.5" baseline
+    for name in ["market", "dataset"]:
         mask = df_res["model"] == "Always 0.5"
         reference_value = df_res.loc[mask, f"diff_adj_brier_score_{name}"].values[0]
         df_res[f"diff_adj_brier_score_{name}"] = 0.25 + (
             df_res[f"diff_adj_brier_score_{name}"] - reference_value
         )
 
-    # Final ranking is equal-weighted
+    # Weighted average
     df_res["diff_adj_brier_score"] = (
         0.5 * df_res["diff_adj_brier_score_market"]
         + 0.5 * df_res["diff_adj_brier_score_dataset"]
