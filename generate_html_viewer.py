@@ -475,9 +475,33 @@ def generate_html_viewer(output_path="data/results/leaderboard_viewer.html"):
             }
             
             createTable(headers, filename) {
+                // Reorder headers to put 'organization' right after 'model'
+                const reorderedHeaders = [];
+                let modelIndex = -1;
+                let orgIndex = -1;
+                
+                // Find the indices
+                headers.forEach((header, index) => {
+                    if (header === 'model') modelIndex = index;
+                    if (header === 'organization') orgIndex = index;
+                });
+                
+                // Build reordered array
+                headers.forEach((header, index) => {
+                    if (header === 'model') {
+                        reorderedHeaders.push(header);
+                        // Add organization right after model if it exists
+                        if (orgIndex !== -1) {
+                            reorderedHeaders.push('organization');
+                        }
+                    } else if (header !== 'organization') {
+                        reorderedHeaders.push(header);
+                    }
+                });
+                
                 // Create header
                 const headerRow = document.createElement('tr');
-                headers.forEach(header => {
+                reorderedHeaders.forEach(header => {
                     const th = document.createElement('th');
                     th.textContent = this.getCleanColumnName(header);
                     th.classList.add('sortable');
@@ -486,6 +510,9 @@ def generate_html_viewer(output_path="data/results/leaderboard_viewer.html"):
                     th.addEventListener('click', () => this.sortTable(header));
                     headerRow.appendChild(th);
                 });
+                
+                // Store the reordered headers for use in renderTableBody
+                this.columnOrder = reorderedHeaders;
                 
                 this.tableHead.innerHTML = '';
                 this.tableHead.appendChild(headerRow);
@@ -501,7 +528,10 @@ def generate_html_viewer(output_path="data/results/leaderboard_viewer.html"):
                 this.filteredData.forEach(row => {
                     const tr = document.createElement('tr');
                     
-                    Object.keys(row).forEach(key => {
+                    // Use the reordered column order if available, otherwise use original keys
+                    const keysToIterate = this.columnOrder || Object.keys(row);
+                    
+                    keysToIterate.forEach(key => {
                         const td = document.createElement('td');
                         const value = row[key];
                         
@@ -526,6 +556,8 @@ def generate_html_viewer(output_path="data/results/leaderboard_viewer.html"):
                             const num = parseFloat(value);
                             if (this.isIntegerColumn(key)) {
                                 td.textContent = Math.round(num).toString();
+                            } else if (this.isScoreColumn(key)) {
+                                td.textContent = this.formatToSignificantDigits(num, 3);
                             } else {
                                 td.textContent = num.toFixed(4);
                             }
@@ -544,6 +576,17 @@ def generate_html_viewer(output_path="data/results/leaderboard_viewer.html"):
             
             isNumeric(value) {
                 return !isNaN(parseFloat(value)) && isFinite(value);
+            }
+            
+            formatToSignificantDigits(num, digits) {
+                if (num === 0) return '0';
+                const magnitude = Math.floor(Math.log10(Math.abs(num)));
+                const factor = Math.pow(10, digits - 1 - magnitude);
+                return (Math.round(num * factor) / factor).toString();
+            }
+            
+            isScoreColumn(columnName) {
+                return columnName.includes('diff_adj_brier_score');
             }
             
             sortTable(column) {
