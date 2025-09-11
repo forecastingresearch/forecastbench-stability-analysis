@@ -179,13 +179,11 @@ def main():
             return_scored_data=config["stability_analysis"],
         )
         if config["stability_analysis"]:
-            df_stability = perform_stability_analysis(
+            perform_stability_analysis(
                 df_with_scores=res_dict["df_with_scores"],
                 model_days_active_treshold=STABILITY_THRESHOLD,
-                market_mask_val=False,
-                graph_folder=GRAPH_FOLDER,
+                results_folder=RESULTS_FOLDER,
             )
-            df_stability.to_csv(f"{GRAPH_FOLDER}/stability.csv", index=False)
 
     print(" ✅")
 
