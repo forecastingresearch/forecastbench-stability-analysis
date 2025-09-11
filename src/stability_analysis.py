@@ -244,17 +244,35 @@ def process_parsed_data(
 
     # Calculate day of first model forecast
     # in ForecastBench (i.e., start of participation)
-    df_temp = df_forecasts.groupby("model")["forecast_due_date"].min().reset_index()
-    df_temp.rename(
-        columns={"forecast_due_date": "model_first_forecast_date"}, inplace=True
-    )
-    df_forecasts = pd.merge(df_forecasts, df_temp, on="model", how="left")
+    # separately for dataset & market questions
     if reference_date is None:
         reference_date = pd.to_datetime(df_forecasts["resolution_date"]).max()
-    df_forecasts["model_days_active"] = (
-        pd.to_datetime(reference_date)
-        - pd.to_datetime(df_forecasts["model_first_forecast_date"])
-    ).dt.days
+
+    for name, mask_val in [
+        ("market", True),
+        ("dataset", False),
+    ]:
+        # Calculate date of first forecast
+        mask = df_forecasts["market_question"] == mask_val
+        df_temp = (
+            df_forecasts[mask].groupby("model")["forecast_due_date"].min().reset_index()
+        )
+        df_temp.rename(
+            columns={"forecast_due_date": f"model_first_forecast_date_{name}"},
+            inplace=True,
+        )
+        df_forecasts = pd.merge(df_forecasts, df_temp, on="model", how="left")
+
+        # Calculate number of days since first forecast
+        # relative to the reference date
+        df_forecasts[f"model_days_active_{name}"] = (
+            pd.to_datetime(reference_date)
+            - pd.to_datetime(df_forecasts[f"model_first_forecast_date_{name}"])
+        ).dt.days
+    df_forecasts["model_first_forecast_date"] = np.minimum(
+        df_forecasts["model_first_forecast_date_market"],
+        df_forecasts["model_first_forecast_date_dataset"],
+    )
 
     # Check if all models have release dates
     mask = df_forecasts["organization"] != "ForecastBench"
@@ -277,8 +295,11 @@ def process_parsed_data(
             "model",
             "model_release_date",
             "model_first_forecast_date",
+            "model_first_forecast_date_market",
+            "model_first_forecast_date_dataset",
             "model_days_released",
-            "model_days_active",
+            "model_days_active_market",
+            "model_days_active_dataset",
             "imputed_rate",
             "imputed",
             "question_id",
@@ -379,45 +400,19 @@ def create_leaderboard(
         min_days_active_dataset: Min days active to show dataset scores"""
     df = df_with_scores.copy()
 
-    # Calculate days active for each model on market
-    # & dataset questions separately
-    mask = df["market_question"]
-    df_model_activity_market = (
-        df[mask]
-        .groupby("model")
-        .agg({"model_days_active": "max", "organization": "first"})
-        .reset_index()
-    )
-    df_model_activity_market.rename(
-        columns={"model_days_active": "model_days_active_market"}, inplace=True
-    )
-
-    df_model_activity_dataset = (
-        df[~mask]
-        .groupby("model")
-        .agg({"model_days_active": "max", "organization": "first"})
-        .reset_index()
-    )
-    df_model_activity_dataset.rename(
-        columns={"model_days_active": "model_days_active_dataset"}, inplace=True
-    )
-
-    df_model_activity = pd.merge(
-        df_model_activity_dataset,
-        df_model_activity_market[["model", "model_days_active_market"]],
-        how="left",
-        validate="1:1",
-    )
-
     # Create base dataframe
-    df_res = df_model_activity[
-        [
-            "model",
-            "model_days_active_market",
-            "model_days_active_dataset",
-            "organization",
+    df_res = (
+        df[
+            [
+                "model",
+                "model_days_active_market",
+                "model_days_active_dataset",
+                "organization",
+            ]
         ]
-    ].copy()
+        .copy()
+        .drop_duplicates()
+    )
 
     # Aggregate by question type
     for name, mask_val, min_days in [
@@ -436,9 +431,7 @@ def create_leaderboard(
         if min_days is not None:
             df_agg = pd.merge(
                 df_agg,
-                df_model_activity[
-                    ["model", f"model_days_active_{name}", "organization"]
-                ],
+                df_res[["model", f"model_days_active_{name}", "organization"]],
                 on="model",
                 how="left",
             )
