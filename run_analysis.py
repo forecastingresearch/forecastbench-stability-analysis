@@ -72,9 +72,33 @@ DROP_BASELINE_MODELS = [
     "Imputed Forecaster",
 ]
 
-# Number of days active for models for the stability
-# analysis
+# Number of days active for models for the stability analysis
 STABILITY_THRESHOLD = 180
+
+# Stability metrics to calculate
+STABILITY_METRICS = [
+    "correlation",  # Pearson correlation
+    "rank_correlation",  # Spearman rank correlation
+    "median_displacement",  # Median absolute rank displacement
+    "top25_retention",  # Top-25% retention rate
+]
+
+# Stability analysis visualization options
+STABILITY_VIZ_CONFIG = {
+    "save_individual_plots": True,  # Save individual metric plots
+    "save_combined_plot": True,  # Save combined subplot
+    "show_plots": False,  # Display plots during execution
+    "dpi": 300,  # Plot resolution
+    "figsize": (12, 10),  # Combined plot size
+}
+
+# Metric display labels for visualization
+METRIC_LABELS = {
+    "correlation": "Score Correlation",
+    "rank_correlation": "Rank Correlation (Spearman ρ)",
+    "median_displacement": "Median Rank Displacement",
+    "top25_retention": "Top-25% Retention Rate",
+}
 
 # Folder definitions
 RAW_FOLDER = "./data/raw"
@@ -127,6 +151,7 @@ def main():
             "min_days_active_market": None,
             "min_days_active_dataset": None,
             "stability_analysis": True,
+            "stability_metrics": STABILITY_METRICS,
         },
         {
             "name": "leaderboard_baseline_filter_after.csv",
@@ -181,8 +206,12 @@ def main():
         if config["stability_analysis"]:
             perform_stability_analysis(
                 df_with_scores=res_dict["df_with_scores"],
-                model_days_active_treshold=STABILITY_THRESHOLD,
+                model_days_active_threshold=STABILITY_THRESHOLD,
                 results_folder=RESULTS_FOLDER,
+                metrics=STABILITY_METRICS,
+                viz_config=STABILITY_VIZ_CONFIG,
+                metric_labels=METRIC_LABELS,
+                output_suffix=config["name"].replace(".csv", ""),
             )
 
     print(" ✅")

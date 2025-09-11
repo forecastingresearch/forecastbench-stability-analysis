@@ -8,6 +8,86 @@ import pandas as pd
 import pyfixest as pf
 
 
+class StabilityMetrics:
+    """Calculator for various stability metrics"""
+
+    def __init__(
+        self, df_full_scores: pd.DataFrame, df_incomplete_scores: pd.DataFrame
+    ):
+        """
+        Initialize with full and incomplete score dataframes
+
+        Args:
+            df_full_scores: DataFrame with full period scores
+                (has 'diff_adj_brier_score' column)
+            df_incomplete_scores: DataFrame with incomplete period scores
+                (has 'diff_adj_brier_score' column)
+        """
+        self.df_full = df_full_scores.copy()
+        self.df_incomplete = df_incomplete_scores.copy()
+        self.df_combined = self._merge_scores()
+
+    def _merge_scores(self) -> pd.DataFrame:
+        """Merge full and incomplete score dataframes"""
+        df_incomplete_renamed = self.df_incomplete.rename(
+            columns={"diff_adj_brier_score": "diff_adj_brier_score_0_x"}
+        )
+        return pd.merge(
+            self.df_full, df_incomplete_renamed, on="model", how="left", validate="1:1"
+        )
+
+    def score_correlation(self) -> float:
+        """Pearson correlation between full and incomplete period scores"""
+        return (
+            self.df_combined[["diff_adj_brier_score", "diff_adj_brier_score_0_x"]]
+            .corr()
+            .values[0, 1]
+        )
+
+    def rank_correlation(self) -> float:
+        """Spearman rank correlation between rankings"""
+        return (
+            self.df_combined[["diff_adj_brier_score", "diff_adj_brier_score_0_x"]]
+            .corr(method="spearman")
+            .values[0, 1]
+        )
+
+    def median_displacement(self) -> float:
+        """Median absolute rank displacement"""
+        full_ranks = self.df_combined["diff_adj_brier_score"].rank(ascending=True)
+        incomplete_ranks = self.df_combined["diff_adj_brier_score_0_x"].rank(
+            ascending=True
+        )
+        return np.median(np.abs(full_ranks - incomplete_ranks))
+
+    def top_k_retention(self, k: int = 25) -> float:
+        """
+        Top-K retention rate (fraction of top-K models that remain in top-K)
+
+        Args:
+            k: Number or percentage of top models to consider
+        """
+        n_models = len(self.df_combined)
+
+        # If k > n_models, use 25% of models
+        if k > n_models:
+            raise ValueError(
+                f"Number of top-k model ({k}) exceeds the number\
+                      of models in the sample ({n_models})"
+            )
+
+        # Get top-k models by score (nsmallest because lower scores are better)
+        full_top_k = set(self.df_combined.nsmallest(k, "diff_adj_brier_score")["model"])
+        incomplete_top_k = set(
+            self.df_combined.nsmallest(k, "diff_adj_brier_score_0_x")["model"]
+        )
+
+        # Calculate retention rate
+        if len(full_top_k) == 0:
+            return 0.0
+        return len(full_top_k.intersection(incomplete_top_k)) / len(full_top_k)
+
+
 def parse_forecast_data(base_dir: str = ".") -> pd.DataFrame:
     """
     Read all JSON forecast files and combine into a single DataFrame.
@@ -491,11 +571,134 @@ def create_leaderboard(
     return df_res
 
 
+def _save_and_plot_results(
+    df_results: pd.DataFrame,
+    name: str,
+    results_folder: str,
+    metrics: list,
+    viz_config: dict,
+    metric_labels: dict,
+    output_suffix: str = "",
+):
+    """Save and plot with configuration support"""
+
+    # Save results with suffix to avoid conflicts
+    suffix = f"_{output_suffix}" if output_suffix else ""
+    csv_path = f"{results_folder}/stability_{name}{suffix}.csv"
+    df_results.to_csv(csv_path, index=False)
+
+    # Individual plots
+    if viz_config.get("save_individual_plots", True):
+        for metric in metrics:
+            if metric in df_results.columns:
+                plt.figure(figsize=(8, 6))
+                plt.plot(df_results["x"], df_results[metric], linewidth=2)
+                plt.xlabel("Days (X in 0-X range)")
+                plt.ylabel(metric_labels.get(metric, metric.replace("_", " ").title()))
+                plt.title(
+                    f"{metric_labels.get(metric, metric)} - {name.title()} Questions"
+                )
+                plt.grid(True, alpha=0.3)
+
+                plot_path = f"{results_folder}/stability_{name}_{metric}{suffix}.png"
+                plt.savefig(plot_path, dpi=viz_config.get("dpi", 300))
+
+                if viz_config.get("show_plots", False):
+                    plt.show()
+                else:
+                    plt.close()
+
+    # Combined plot
+    if (
+        viz_config.get("save_combined_plot", True)
+        and len([m for m in metrics if m in df_results.columns]) > 1
+    ):
+        n_metrics = len([m for m in metrics if m in df_results.columns])
+        n_cols = 2
+        n_rows = (n_metrics + 1) // 2
+
+        figsize = viz_config.get("figsize", (12, 10))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+        if n_rows == 1:
+            axes = [axes] if n_cols == 1 else axes
+        else:
+            axes = axes.flatten()
+
+        plot_idx = 0
+        for metric in metrics:
+            if metric in df_results.columns and plot_idx < len(axes):
+                axes[plot_idx].plot(df_results["x"], df_results[metric], linewidth=2)
+                axes[plot_idx].set_xlabel("Days (X in 0-X range)")
+                axes[plot_idx].set_ylabel(
+                    metric_labels.get(metric, metric.replace("_", " ").title())
+                )
+                axes[plot_idx].set_title(
+                    f"{metric_labels.get(metric, metric)} - {name.title()}"
+                )
+                axes[plot_idx].grid(True, alpha=0.3)
+                plot_idx += 1
+
+        # Hide unused subplots
+        for i in range(plot_idx, len(axes)):
+            axes[i].set_visible(False)
+
+        plt.tight_layout()
+        combined_path = f"{results_folder}/stability_{name}_combined{suffix}.png"
+        plt.savefig(combined_path, dpi=viz_config.get("dpi", 300))
+
+        if viz_config.get("show_plots", False):
+            plt.show()
+        else:
+            plt.close()
+
+
 def perform_stability_analysis(
     df_with_scores: pd.DataFrame,
-    model_days_active_treshold: int,
+    model_days_active_threshold: int,
     results_folder: str,
+    metrics: list = None,
+    viz_config: dict = None,
+    metric_labels: dict = None,
+    output_suffix: str = "",
 ):
+    """
+    Enhanced stability analysis with configurable metrics
+
+    Args:
+        df_with_scores: DataFrame with diff-adj scores
+        model_days_active_threshold: Min days active for model inclusion
+        results_folder: Output directory
+        metrics: List of metrics to calculate (defaults to all)
+        viz_config: Visualization configuration dict
+        output_suffix: Suffix for output filenames to avoid conflicts
+    """
+
+    # Default configurations
+    if metrics is None:
+        metrics = [
+            "correlation",
+            "rank_correlation",
+            "median_displacement",
+            "top25_retention",
+        ]
+
+    if viz_config is None:
+        viz_config = {
+            "save_individual_plots": True,
+            "save_combined_plot": True,
+            "show_plots": False,
+            "dpi": 300,
+            "figsize": (12, 10),
+        }
+
+    if metric_labels is None:
+        metric_labels = {
+            "correlation": "Score Correlation",
+            "rank_correlation": "Rank Correlation (Spearman ρ)",
+            "median_displacement": "Median Rank Displacement",
+            "top25_retention": "Top-25% Retention Rate",
+        }
+
     df = df_with_scores.copy()
     # Calculate days active at resolution date
     df["days_model_active_at_resolution"] = (
@@ -504,9 +707,8 @@ def perform_stability_analysis(
     ).dt.days
 
     # For comparability, only consider models
-    # that are active for at least model_days_active_treshold
-    # days
-    mask = df["model_days_active"] >= model_days_active_treshold
+    # that are active for at least model_days_active_threshold days
+    mask = df["model_days_active"] >= model_days_active_threshold
     df = df[mask].copy()
 
     # Perform the stability analysis separately for
@@ -515,18 +717,16 @@ def perform_stability_analysis(
         ("market", True),
         ("dataset", False),
     ]:
-        # Calculate the baseline (0-180 days)
+        # Calculate the baseline (full period scores)
         mask = df["market_question"] == market_mask_val
         df_full = df[mask].copy()
         df_full_scores = (
             df_full.groupby("model")["diff_adj_brier_score"].mean().reset_index()
         )
 
-        # Calculate correlations with rankings that use
-        # data from the first [0, X] days of model performance
-        # for each value of X
-        x_values = range(0, model_days_active_treshold + 1)
-        correlations = []
+        # Calculate all metrics for each time window
+        x_values = range(0, model_days_active_threshold + 1)
+        results = []
 
         for x in x_values:
             mask = (
@@ -540,36 +740,32 @@ def perform_stability_analysis(
                 .mean()
                 .reset_index()
             )
-            df_incomplete_scores.rename(
-                columns={"diff_adj_brier_score": "diff_adj_brier_score_0_x"},
-                inplace=True,
-            )
 
-            # Calculate correlation with full data
-            df_combined = df_full_scores.copy()
-            df_combined = pd.merge(
-                df_combined,
-                df_incomplete_scores,
-                on="model",
-                how="left",
-                validate="1:1",
-            )
-            corr = (
-                df_combined[["diff_adj_brier_score", "diff_adj_brier_score_0_x"]]
-                .corr()
-                .values[0, 1]
-            )
-            correlations.append({"x": x, "corr": corr})
-        df_correlations = pd.DataFrame(correlations)
+            # Calculate metrics using StabilityMetrics class
+            if len(df_incomplete_scores) > 0:  # Only if we have data
+                metrics_calc = StabilityMetrics(df_full_scores, df_incomplete_scores)
 
-        # Get the graph
-        plt.plot(df_correlations["x"], df_correlations["corr"], linewidth=2)
-        plt.xlabel("Days (X in 0-X range)")
-        plt.ylabel("Correlation with 0-180 day score")
-        plt.title("Correlation between 0-X day score and 0-180 day score")
-        plt.grid(True, alpha=0.3)
-        plt.savefig(f"{results_folder}/stability_{name}.png", dpi=300)
-        plt.show()
+                row = {"x": x}
+                if "correlation" in metrics:
+                    row["correlation"] = metrics_calc.score_correlation()
+                if "rank_correlation" in metrics:
+                    row["rank_correlation"] = metrics_calc.rank_correlation()
+                if "median_displacement" in metrics:
+                    row["median_displacement"] = metrics_calc.median_displacement()
+                if "top25_retention" in metrics:
+                    row["top25_retention"] = metrics_calc.top_k_retention(25)
 
-        # Save CSV file
-        df_correlations.to_csv(f"{results_folder}/stability_{name}.csv", index=False)
+                results.append(row)
+
+        # Save and visualize results
+        if results:  # Only if we have results
+            df_results = pd.DataFrame(results)
+            _save_and_plot_results(
+                df_results,
+                name,
+                results_folder,
+                metrics,
+                viz_config,
+                metric_labels,
+                output_suffix,
+            )
