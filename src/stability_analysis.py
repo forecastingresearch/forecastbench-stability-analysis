@@ -244,7 +244,7 @@ def process_parsed_data(
 
     # Calculate day of first model forecast
     # in ForecastBench (i.e., start of participation)
-    df_temp = df_forecasts.groupby("model")["forecast_due_date"].first().reset_index()
+    df_temp = df_forecasts.groupby("model")["forecast_due_date"].min().reset_index()
     df_temp.rename(
         columns={"forecast_due_date": "model_first_forecast_date"}, inplace=True
     )

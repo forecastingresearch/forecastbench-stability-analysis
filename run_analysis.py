@@ -5,6 +5,7 @@ sys.path.append("src")
 
 import pandas as pd
 
+from generate_html_viewer import generate_html_viewer
 from stability_analysis import (
     compute_diff_adj_scores,
     create_leaderboard,
@@ -12,7 +13,6 @@ from stability_analysis import (
     parse_question_data,
     process_parsed_data,
 )
-from generate_html_viewer import generate_html_viewer
 
 
 def generate_leaderboard(
@@ -79,30 +79,30 @@ RESULTS_FOLDER = "./data/results"
 
 
 def main():
-    # print("Parsing forecast JSON files...", end="", flush=True)
-    # df = parse_forecast_data(f"{RAW_FOLDER}/forecast_sets/")
-    # df.to_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv", index=False)
-    # print(" ✅")
-    # print("Parsing question JSON files...", end="", flush=True)
-    # df = parse_question_data(f"{RAW_FOLDER}/question_sets/")
-    # df.to_csv(f"{PROCESSED_FOLDER}/parsed_questions.csv", index=False)
-    # print(" ✅")
-    # print("Processing parsed files...", end="", flush=True)
-    # df_forecasts = pd.read_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv")
-    # df_questions = pd.read_csv(f"{PROCESSED_FOLDER}/parsed_questions.csv")
-    # df_model_release_dates = pd.read_csv(f"{RAW_FOLDER}/model_release_dates.csv")
-    # df = process_parsed_data(
-    #     df_forecasts=df_forecasts,
-    #     df_questions=df_questions,
-    #     df_model_release_dates=df_model_release_dates,
-    #     imputation_threshold=IMPUTATION_THRESHOLD,
-    #     reference_date=REFERENCE_DATE,
-    # )
-    # df.to_csv(f"{PROCESSED_FOLDER}/processed_data.csv", index=False)
-    # df[["model", "model_release_date"]].drop_duplicates().sort_values(
-    #     by="model", ascending=True
-    # ).to_csv(f"{PROCESSED_FOLDER}/model_release_dates.csv", index=False)
-    # print(" ✅")
+    print("Parsing forecast JSON files...", end="", flush=True)
+    df = parse_forecast_data(f"{RAW_FOLDER}/forecast_sets/")
+    df.to_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv", index=False)
+    print(" ✅")
+    print("Parsing question JSON files...", end="", flush=True)
+    df = parse_question_data(f"{RAW_FOLDER}/question_sets/")
+    df.to_csv(f"{PROCESSED_FOLDER}/parsed_questions.csv", index=False)
+    print(" ✅")
+    print("Processing parsed files...", end="", flush=True)
+    df_forecasts = pd.read_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv")
+    df_questions = pd.read_csv(f"{PROCESSED_FOLDER}/parsed_questions.csv")
+    df_model_release_dates = pd.read_csv(f"{RAW_FOLDER}/model_release_dates.csv")
+    df = process_parsed_data(
+        df_forecasts=df_forecasts,
+        df_questions=df_questions,
+        df_model_release_dates=df_model_release_dates,
+        imputation_threshold=IMPUTATION_THRESHOLD,
+        reference_date=REFERENCE_DATE,
+    )
+    df.to_csv(f"{PROCESSED_FOLDER}/processed_data.csv", index=False)
+    df[["model", "model_release_date"]].drop_duplicates().sort_values(
+        by="model", ascending=True
+    ).to_csv(f"{PROCESSED_FOLDER}/model_release_dates.csv", index=False)
+    print(" ✅")
     print("Estimating diff-adj Brier scores...", end="", flush=True)
     df = pd.read_csv(f"{PROCESSED_FOLDER}/processed_data.csv")
 
@@ -143,6 +143,12 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 30,
         },
+        {
+            "name": "leaderboard_aggressive_new_proposal.csv",
+            "mask": None,
+            "min_days_active_market": 30,
+            "min_days_active_dataset": 7,
+        },
     ]
     # Generate all leaderboards
     for config in leaderboard_config:
@@ -158,7 +164,7 @@ def main():
         )
 
     print(" ✅")
-    
+
     print("Generating interactive HTML viewer...", end="", flush=True)
     html_viewer_path = generate_html_viewer(f"{RESULTS_FOLDER}/leaderboard_viewer.html")
     print(" ✅")
