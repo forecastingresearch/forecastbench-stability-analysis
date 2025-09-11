@@ -11,6 +11,7 @@ from stability_analysis import (
     create_leaderboard,
     parse_forecast_data,
     parse_question_data,
+    perform_sample_size_analysis,
     perform_stability_analysis,
     process_parsed_data,
 )
@@ -152,6 +153,7 @@ def main():
             "min_days_active_dataset": None,
             "stability_analysis": True,
             "stability_metrics": STABILITY_METRICS,
+            "sample_size_analysis": True,
         },
         {
             "name": "leaderboard_baseline_filter_after.csv",
@@ -159,6 +161,7 @@ def main():
             "min_days_active_market": 100,
             "min_days_active_dataset": 100,
             "stability_analysis": False,
+            "sample_size_analysis": False,
         },
         {
             "name": "leaderboard_all_resolved.csv",
@@ -167,6 +170,7 @@ def main():
             "min_days_active_market": None,
             "min_days_active_dataset": None,
             "stability_analysis": False,
+            "sample_size_analysis": False,
         },
         {
             "name": "leaderboard_no_filtering.csv",
@@ -174,6 +178,7 @@ def main():
             "min_days_active_market": None,
             "min_days_active_dataset": None,
             "stability_analysis": False,
+            "sample_size_analysis": False,
         },
         {
             "name": "leaderboard_new_proposal.csv",
@@ -181,6 +186,7 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 30,
             "stability_analysis": False,
+            "sample_size_analysis": False,
         },
         {
             "name": "leaderboard_aggressive_new_proposal.csv",
@@ -188,6 +194,7 @@ def main():
             "min_days_active_market": 30,
             "min_days_active_dataset": 7,
             "stability_analysis": False,
+            "sample_size_analysis": False,
         },
     ]
     # Generate all leaderboards
@@ -201,7 +208,8 @@ def main():
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
-            return_scored_data=config["stability_analysis"],
+            return_scored_data=config["stability_analysis"]
+            or config.get("sample_size_analysis", False),
         )
         if config["stability_analysis"]:
             # Run stability analysis for each threshold value
@@ -215,6 +223,14 @@ def main():
                     metric_labels=METRIC_LABELS,
                     output_suffix=f"{config['name'].replace('.csv', '')}_threshold_{threshold}",
                 )
+
+        if config.get("sample_size_analysis", False):
+            # Run sample size analysis
+            perform_sample_size_analysis(
+                df_with_scores=res_dict["df_with_scores"],
+                results_folder=RESULTS_FOLDER,
+                output_suffix=config["name"].replace(".csv", ""),
+            )
 
     print(" ✅")
 

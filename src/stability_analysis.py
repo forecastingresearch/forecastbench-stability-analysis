@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -769,3 +770,129 @@ def perform_stability_analysis(
                 metric_labels,
                 output_suffix,
             )
+
+
+def perform_sample_size_analysis(
+    df_with_scores: pd.DataFrame,
+    results_folder: str,
+    max_thresholds: int = 250,
+    max_days: int = 181,
+    output_suffix: str = "",
+):
+    """
+    Perform sample size analysis to determine how many days are needed
+    for 80% of models to reach a certain number of resolved questions.
+
+    Args:
+        df_with_scores: DataFrame with diff-adj scores and model information
+        results_folder: Output directory for results
+        max_thresholds: Maximum number of questions to analyze (default 250)
+        max_days: Maximum number of days to analyze (default 181: 0-180 inclusive)
+        output_suffix: Suffix for output filenames to avoid conflicts
+    """
+
+    df = df_with_scores.copy()
+
+    # Perform analysis separately for market and dataset questions
+    for name, market_mask_val in [
+        ("market", True),
+        ("dataset", False),
+    ]:
+        # Get unique models and their first forecast dates for this question type
+        mask = df["market_question"] == market_mask_val
+        df_subset = df[mask].copy()
+
+        # Get unique models and their first forecast dates
+        df_model_info = (
+            df_subset.groupby("model")["model_first_forecast_date"]
+            .first()
+            .reset_index()
+        )
+
+        # Create result list
+        result_rows = []
+
+        for _, row in df_model_info.iterrows():
+            model = row["model"]
+            start_date = pd.to_datetime(row["model_first_forecast_date"])
+
+            # Get all questions for this model
+            mask_model = (df_subset["model"] == model) & (
+                df_subset["organization"] != "ForecastBench"
+            )
+            model_questions = df_subset[mask_model].copy()
+
+            # Generate dates from start to start + max_days-1 days
+            for days_offset in range(max_days):  # 0 to max_days-1 inclusive
+                current_date = start_date + timedelta(days=days_offset)
+
+                # Count questions resolved by this date
+                num_resolved = model_questions[
+                    pd.to_datetime(model_questions["resolution_date"]) <= current_date
+                ]["question_id"].nunique()
+
+                result_rows.append(
+                    {
+                        "model": model,
+                        "date": current_date,
+                        "days_since_model_first_forecast_date": days_offset,
+                        "num_of_resolved_questions": num_resolved,
+                    }
+                )
+
+        # Create final dataframe
+        result_df = pd.DataFrame(result_rows)
+
+        # Calculate for each threshold, when 80% of models reach it
+        thresholds = range(1, max_thresholds)
+        days_to_threshold = []
+
+        for threshold in thresholds:
+            # For each day, calculate % of models that have >= threshold resolved
+            daily_pct = result_df.groupby("days_since_model_first_forecast_date").apply(
+                lambda x: (x["num_of_resolved_questions"] >= threshold).mean(),
+                include_groups=False,
+            )
+
+            # Find first day where >= 80% of models have reached threshold
+            days_above_80pct = daily_pct[daily_pct >= 0.8]
+
+            if len(days_above_80pct) > 0:
+                days_to_threshold.append(
+                    {
+                        "num_questions": threshold,
+                        "days_until_80pct": days_above_80pct.index[0],
+                    }
+                )
+
+        # Create dataframe and save results
+        if days_to_threshold:
+            threshold_df = pd.DataFrame(days_to_threshold)
+
+            # Save CSV with suffix to avoid conflicts
+            suffix = f"_{output_suffix}" if output_suffix else ""
+            csv_path = f"{results_folder}/sample_size_analysis_{name}{suffix}.csv"
+            threshold_df.to_csv(csv_path, index=False)
+
+            # Create and save plot
+            plt.figure(figsize=(10, 6))
+            plt.plot(
+                threshold_df["num_questions"],
+                threshold_df["days_until_80pct"],
+                marker="o",
+            )
+            plt.xlabel("Number of Resolved Questions ($X$)")
+            plt.ylabel("Days Until 80% of Models Reach $X$")
+            plt.title(
+                f"Days for 80% of Models to Reach $X$ Resolved {name.title()} Questions"
+            )
+            plt.grid(True, alpha=0.3)
+
+            # Save plot
+            plot_path = f"{results_folder}/sample_size_analysis_{name}{suffix}.png"
+            plt.savefig(plot_path, dpi=300)
+            plt.close()  # Close to avoid displaying
+
+            print(f"Sample size analysis for {name} questions completed:")
+            print(f"  - Data saved: {csv_path}")
+            print(f"  - Plot saved: {plot_path}")
