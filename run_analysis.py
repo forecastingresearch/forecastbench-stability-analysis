@@ -73,7 +73,7 @@ DROP_BASELINE_MODELS = [
 ]
 
 # Number of days active for models for the stability analysis
-STABILITY_THRESHOLD = 180
+STABILITY_THRESHOLDS = [100, 180]
 
 # Stability metrics to calculate
 STABILITY_METRICS = [
@@ -204,15 +204,17 @@ def main():
             return_scored_data=config["stability_analysis"],
         )
         if config["stability_analysis"]:
-            perform_stability_analysis(
-                df_with_scores=res_dict["df_with_scores"],
-                model_days_active_threshold=STABILITY_THRESHOLD,
-                results_folder=RESULTS_FOLDER,
-                metrics=STABILITY_METRICS,
-                viz_config=STABILITY_VIZ_CONFIG,
-                metric_labels=METRIC_LABELS,
-                output_suffix=config["name"].replace(".csv", ""),
-            )
+            # Run stability analysis for each threshold value
+            for threshold in STABILITY_THRESHOLDS:
+                perform_stability_analysis(
+                    df_with_scores=res_dict["df_with_scores"],
+                    model_days_active_threshold=threshold,
+                    results_folder=RESULTS_FOLDER,
+                    metrics=STABILITY_METRICS,
+                    viz_config=STABILITY_VIZ_CONFIG,
+                    metric_labels=METRIC_LABELS,
+                    output_suffix=f"{config['name'].replace('.csv', '')}_threshold_{threshold}",
+                )
 
     print(" ✅")
 
