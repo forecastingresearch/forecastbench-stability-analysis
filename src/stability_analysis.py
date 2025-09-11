@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pyfixest as pf
 
@@ -114,6 +115,7 @@ def process_parsed_data(
     df_questions: pd.DataFrame,
     df_model_release_dates: pd.DataFrame,
     imputation_threshold: float,
+    reference_date: str = None,
 ) -> pd.DataFrame:
     """
     Process parsed forecast and question data.
@@ -235,7 +237,7 @@ def process_parsed_data(
     )
 
     # Calculate days since model release
-    df_forecasts["days_since_model_release"] = (
+    df_forecasts["model_days_released"] = (
         pd.to_datetime(df_forecasts["forecast_due_date"])
         - pd.to_datetime(df_forecasts["model_release_date"])
     ).dt.days
@@ -247,6 +249,12 @@ def process_parsed_data(
         columns={"forecast_due_date": "model_first_forecast_date"}, inplace=True
     )
     df_forecasts = pd.merge(df_forecasts, df_temp, on="model", how="left")
+    if reference_date is None:
+        reference_date = pd.to_datetime(df_forecasts["resolution_date"]).max()
+    df_forecasts["model_days_active"] = (
+        pd.to_datetime(reference_date)
+        - pd.to_datetime(df_forecasts["model_first_forecast_date"])
+    ).dt.days
 
     # Check if all models have release dates
     mask = df_forecasts["organization"] != "ForecastBench"
@@ -269,7 +277,8 @@ def process_parsed_data(
             "model",
             "model_release_date",
             "model_first_forecast_date",
-            "days_since_model_release",
+            "model_days_released",
+            "model_days_active",
             "imputed_rate",
             "imputed",
             "question_id",
@@ -294,7 +303,7 @@ def process_parsed_data(
 
 
 def get_diff_adj_brier(
-    df: pd.DataFrame, max_days_since_release: int, drop_baseline_models: list
+    df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
 ):
     df = df.copy()
     df_fe_model = df.copy()
@@ -302,7 +311,7 @@ def get_diff_adj_brier(
     # Data filtering for 2FE estimation
 
     # Remove old models
-    mask = (df_fe_model["days_since_model_release"] < max_days_since_release) | (
+    mask = (df_fe_model["model_days_released"] < max_model_days_released) | (
         df_fe_model["organization"] == "ForecastBench"
     )
     df_fe_model = df_fe_model[mask].copy()
@@ -328,7 +337,7 @@ def get_diff_adj_brier(
 
 
 def compute_diff_adj_scores(
-    df: pd.DataFrame, max_days_since_release: int, drop_baseline_models: list
+    df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
 ):
     """Compute diff-adj Brier scores for all questions"""
     df = df.copy()
@@ -339,14 +348,14 @@ def compute_diff_adj_scores(
     # Market questions
     df_market = get_diff_adj_brier(
         df=df[mask],
-        max_days_since_release=max_days_since_release,
+        max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
     )
 
     # Dataset questions
     df_dataset = get_diff_adj_brier(
         df=df[~mask],
-        max_days_since_release=max_days_since_release,
+        max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
     )
 
@@ -356,15 +365,65 @@ def compute_diff_adj_scores(
     return df_combined
 
 
-def create_leaderboard(df_with_scores: pd.DataFrame):
-    """Aggregate diff-adj scores into leaderboard"""
+def create_leaderboard(
+    df_with_scores: pd.DataFrame,
+    min_days_active_market: int = None,
+    min_days_active_dataset: int = None,
+):
+    """Aggregate diff-adj scores into leaderboard with
+     (potentially) activity filters.
+
+    Args:
+        df_with_scores: DataFrame with diff-adj scores
+        min_days_active_market: Min days active to show market scores
+        min_days_active_dataset: Min days active to show dataset scores"""
     df = df_with_scores.copy()
 
+    # Calculate days active for each model on market
+    # & dataset questions separately
+    mask = df["market_question"]
+    df_model_activity_market = (
+        df[mask]
+        .groupby("model")
+        .agg({"model_days_active": "max", "organization": "first"})
+        .reset_index()
+    )
+    df_model_activity_market.rename(
+        columns={"model_days_active": "model_days_active_market"}, inplace=True
+    )
+
+    df_model_activity_dataset = (
+        df[~mask]
+        .groupby("model")
+        .agg({"model_days_active": "max", "organization": "first"})
+        .reset_index()
+    )
+    df_model_activity_dataset.rename(
+        columns={"model_days_active": "model_days_active_dataset"}, inplace=True
+    )
+
+    df_model_activity = pd.merge(
+        df_model_activity_dataset,
+        df_model_activity_market[["model", "model_days_active_market"]],
+        how="left",
+        validate="1:1",
+    )
+
     # Create base dataframe
-    df_res = pd.DataFrame({"model": df["model"].unique()})
+    df_res = df_model_activity[
+        [
+            "model",
+            "model_days_active_market",
+            "model_days_active_dataset",
+            "organization",
+        ]
+    ].copy()
 
     # Aggregate by question type
-    for name, mask_val in [("market", True), ("dataset", False)]:
+    for name, mask_val, min_days in [
+        ("market", True, min_days_active_market),
+        ("dataset", False, min_days_active_dataset),
+    ]:
         df_subset = df[df["market_question"] == mask_val]
 
         df_agg = (
@@ -372,6 +431,25 @@ def create_leaderboard(df_with_scores: pd.DataFrame):
             .agg([("diff_adj_brier_score", "mean"), ("n_forecasts", "count")])
             .reset_index()
         )
+
+        # Apply activity filter only if min_days is specified
+        if min_days is not None:
+            df_agg = pd.merge(
+                df_agg,
+                df_model_activity[
+                    ["model", f"model_days_active_{name}", "organization"]
+                ],
+                on="model",
+                how="left",
+            )
+
+            # Activity filter not specified for ForecastBench models
+            # since they do not have a release date
+            mask_active = (df_agg[f"model_days_active_{name}"] >= min_days) | (
+                df_agg["organization"] == "ForecastBench"
+            )
+            df_agg.loc[~mask_active, "diff_adj_brier_score"] = np.nan
+
         df_agg.rename(
             columns={
                 "diff_adj_brier_score": f"diff_adj_brier_score_{name}",
@@ -380,20 +458,33 @@ def create_leaderboard(df_with_scores: pd.DataFrame):
             inplace=True,
         )
 
-        df_res = pd.merge(df_res, df_agg, on="model", how="left")
+        df_res = pd.merge(
+            df_res,
+            df_agg[["model", f"diff_adj_brier_score_{name}", f"n_forecasts_{name}"]],
+            on="model",
+            how="left",
+        )
 
     # Normalize to "Always 0.5" baseline
     for name in ["market", "dataset"]:
         mask = df_res["model"] == "Always 0.5"
         reference_value = df_res.loc[mask, f"diff_adj_brier_score_{name}"].values[0]
-        df_res[f"diff_adj_brier_score_{name}"] = 0.25 + (
-            df_res[f"diff_adj_brier_score_{name}"] - reference_value
+
+        # Only normalize non-null values
+        not_null = df_res[f"diff_adj_brier_score_{name}"].notna()
+        df_res.loc[not_null, f"diff_adj_brier_score_{name}"] = 0.25 + (
+            df_res.loc[not_null, f"diff_adj_brier_score_{name}"] - reference_value
         )
 
-    # Weighted average
-    df_res["diff_adj_brier_score"] = (
-        0.5 * df_res["diff_adj_brier_score_market"]
-        + 0.5 * df_res["diff_adj_brier_score_dataset"]
+    # Weighted average - only if both components are available
+    mask_both = (
+        df_res["diff_adj_brier_score_market"].notna()
+        & df_res["diff_adj_brier_score_dataset"].notna()
+    )
+
+    df_res.loc[mask_both, "diff_adj_brier_score"] = (
+        0.5 * df_res.loc[mask_both, "diff_adj_brier_score_market"]
+        + 0.5 * df_res.loc[mask_both, "diff_adj_brier_score_dataset"]
     )
 
     df_res = df_res.sort_values(by="diff_adj_brier_score", ascending=True)
