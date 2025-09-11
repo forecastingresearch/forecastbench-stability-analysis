@@ -273,6 +273,10 @@ def process_parsed_data(
         df_forecasts["model_first_forecast_date_market"],
         df_forecasts["model_first_forecast_date_dataset"],
     )
+    df_forecasts["model_days_active"] = np.maximum(
+        df_forecasts["model_days_active_market"],
+        df_forecasts["model_days_active_dataset"],
+    )
 
     # Check if all models have release dates
     mask = df_forecasts["organization"] != "ForecastBench"
@@ -298,6 +302,7 @@ def process_parsed_data(
             "model_first_forecast_date_market",
             "model_first_forecast_date_dataset",
             "model_days_released",
+            "model_days_active",
             "model_days_active_market",
             "model_days_active_dataset",
             "imputed_rate",
