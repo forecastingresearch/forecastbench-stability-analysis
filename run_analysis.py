@@ -12,6 +12,7 @@ from stability_analysis import (
     parse_question_data,
     process_parsed_data,
 )
+from generate_html_viewer import generate_html_viewer
 
 
 def generate_leaderboard(
@@ -157,6 +158,11 @@ def main():
         )
 
     print(" ✅")
+    
+    print("Generating interactive HTML viewer...", end="", flush=True)
+    html_viewer_path = generate_html_viewer(f"{RESULTS_FOLDER}/leaderboard_viewer.html")
+    print(" ✅")
+    print(f"HTML viewer saved to: {html_viewer_path}")
 
 
 if __name__ == "__main__":
