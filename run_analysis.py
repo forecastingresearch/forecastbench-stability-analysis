@@ -156,7 +156,7 @@ def main():
             "sample_size_analysis": True,
         },
         {
-            "name": "leaderboard_baseline_filter_after.csv",
+            "name": "leaderboard_baseline_all_data_for_2FE.csv",
             "mask": None,
             "min_days_active_market": 100,
             "min_days_active_dataset": 100,
@@ -164,16 +164,7 @@ def main():
             "sample_size_analysis": False,
         },
         {
-            "name": "leaderboard_all_resolved.csv",
-            "mask": (df["model_first_forecast_date"] < "2025-06-01")
-            | (df["organization"] == "ForecastBench"),
-            "min_days_active_market": None,
-            "min_days_active_dataset": None,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-        },
-        {
-            "name": "leaderboard_no_filtering.csv",
+            "name": "leaderboard_all_data_no_filtering.csv",
             "mask": None,
             "min_days_active_market": None,
             "min_days_active_dataset": None,
@@ -181,22 +172,15 @@ def main():
             "sample_size_analysis": False,
         },
         {
-            "name": "leaderboard_new_proposal.csv",
+            "name": "leaderboard_proposal.csv",
             "mask": None,
             "min_days_active_market": 50,
-            "min_days_active_dataset": 30,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-        },
-        {
-            "name": "leaderboard_aggressive_new_proposal.csv",
-            "mask": None,
-            "min_days_active_market": 30,
             "min_days_active_dataset": 7,
             "stability_analysis": False,
             "sample_size_analysis": False,
         },
     ]
+
     # Generate all leaderboards
     for config in leaderboard_config:
         res_dict = generate_leaderboard(
