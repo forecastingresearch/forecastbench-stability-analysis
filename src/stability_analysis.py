@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyfixest as pf
@@ -488,3 +489,73 @@ def create_leaderboard(
     df_res = df_res.sort_values(by="diff_adj_brier_score", ascending=True)
 
     return df_res
+
+
+def perform_stability_analysis(
+    df_with_scores: pd.DataFrame,
+    model_days_active_treshold: int,
+    market_mask_val: bool,
+    graph_folder: str,
+):
+    df = df_with_scores.copy()
+    # Calculate days active at resolution date
+    df["days_model_active_at_resolution"] = (
+        pd.to_datetime(df["resolution_date"])
+        - pd.to_datetime(df["model_first_forecast_date"])
+    ).dt.days
+
+    # For comparability, only consider models
+    # that are active for at least model_days_active_treshold
+    # days
+    mask = df["model_days_active"] >= model_days_active_treshold
+    df = df[mask].copy()
+
+    # Calculate the baseline (0-180 days)
+    mask = df["market_question"] == market_mask_val
+    df_full = df[mask].copy()
+    df_full_scores = (
+        df_full.groupby("model")["diff_adj_brier_score"].mean().reset_index()
+    )
+
+    # Calculate correlations with rankings that use
+    # data from the first [0, X] days of model performance
+    # for each value of X
+    x_values = range(0, model_days_active_treshold + 1)
+    correlations = []
+
+    for x in x_values:
+        mask = (
+            (df["market_question"] == market_mask_val)
+            & (df["days_model_active_at_resolution"] >= 0)
+            & (df["days_model_active_at_resolution"] <= x)
+        )
+        df_incomplete = df[mask].copy()
+        df_incomplete_scores = (
+            df_incomplete.groupby("model")["diff_adj_brier_score"].mean().reset_index()
+        )
+        df_incomplete_scores.rename(
+            columns={"diff_adj_brier_score": "diff_adj_brier_score_0_x"}, inplace=True
+        )
+
+        # Calculate correlation with full data
+        df_combined = df_full_scores.copy()
+        df_combined = pd.merge(
+            df_combined, df_incomplete_scores, on="model", how="left", validate="1:1"
+        )
+        corr = (
+            df_combined[["diff_adj_brier_score", "diff_adj_brier_score_0_x"]]
+            .corr()
+            .values[0, 1]
+        )
+        correlations.append({"x": x, "corr": corr})
+    df_correlations = pd.DataFrame(correlations)
+
+    # Get the graph
+    plt.plot(df_correlations["x"], df_correlations["corr"], linewidth=2)
+    plt.xlabel("Days (X in 0-X range)")
+    plt.ylabel("Correlation with 0-180 day score")
+    plt.title("Correlation between 0-X day score and 0-180 day score")
+    plt.grid(True, alpha=0.3)
+    plt.savefig(f"{graph_folder}/stability_graph.png", dpi=300)
+
+    return df_correlations

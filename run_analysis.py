@@ -11,6 +11,7 @@ from stability_analysis import (
     create_leaderboard,
     parse_forecast_data,
     parse_question_data,
+    perform_stability_analysis,
     process_parsed_data,
 )
 
@@ -24,6 +25,7 @@ def generate_leaderboard(
     results_folder,
     min_days_active_market=None,
     min_days_active_dataset=None,
+    return_scored_data=False,
 ):
     """Generate and save a leaderboard with given filters"""
     df_filtered = df.loc[mask].copy() if mask is not None else df.copy()
@@ -39,8 +41,10 @@ def generate_leaderboard(
         min_days_active_dataset=min_days_active_dataset,
     )
     df_leaderboard.to_csv(f"{results_folder}/{output_filename}", index=False)
-
-    return df_leaderboard
+    if return_scored_data:
+        return {"df_leaderboard": df_leaderboard, "df_with_scores": df_with_scores}
+    else:
+        return {"df_leaderboard": df_leaderboard}
 
 
 # EXPECTED RUNTIME: 1-2 minutes on a standard laptop
@@ -68,10 +72,15 @@ DROP_BASELINE_MODELS = [
     "Imputed Forecaster",
 ]
 
+# Number of days active for models for the stability
+# analysis
+STABILITY_THRESHOLD = 180
+
 # Folder definitions
 RAW_FOLDER = "./data/raw"
 PROCESSED_FOLDER = "./data/processed"
 RESULTS_FOLDER = "./data/results"
+GRAPH_FOLDER = "./data/results/graphs"
 
 # =====================================================
 # MAIN SCRIPT
@@ -117,12 +126,14 @@ def main():
             ),
             "min_days_active_market": None,
             "min_days_active_dataset": None,
+            "stability_analysis": True,
         },
         {
             "name": "leaderboard_baseline_filter_after.csv",
             "mask": None,
             "min_days_active_market": 100,
             "min_days_active_dataset": 100,
+            "stability_analysis": False,
         },
         {
             "name": "leaderboard_all_resolved.csv",
@@ -130,29 +141,33 @@ def main():
             | (df["organization"] == "ForecastBench"),
             "min_days_active_market": None,
             "min_days_active_dataset": None,
+            "stability_analysis": False,
         },
         {
             "name": "leaderboard_no_filtering.csv",
             "mask": None,
             "min_days_active_market": None,
             "min_days_active_dataset": None,
+            "stability_analysis": False,
         },
         {
             "name": "leaderboard_new_proposal.csv",
             "mask": None,
             "min_days_active_market": 50,
             "min_days_active_dataset": 30,
+            "stability_analysis": False,
         },
         {
             "name": "leaderboard_aggressive_new_proposal.csv",
             "mask": None,
             "min_days_active_market": 30,
             "min_days_active_dataset": 7,
+            "stability_analysis": False,
         },
     ]
     # Generate all leaderboards
     for config in leaderboard_config:
-        generate_leaderboard(
+        res_dict = generate_leaderboard(
             df=df,
             mask=config["mask"],
             output_filename=config["name"],
@@ -161,7 +176,16 @@ def main():
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
+            return_scored_data=config["stability_analysis"],
         )
+        if config["stability_analysis"]:
+            df_stability = perform_stability_analysis(
+                df_with_scores=res_dict["df_with_scores"],
+                model_days_active_treshold=STABILITY_THRESHOLD,
+                market_mask_val=False,
+                graph_folder=GRAPH_FOLDER,
+            )
+            df_stability.to_csv(f"{GRAPH_FOLDER}/stability.csv", index=False)
 
     print(" ✅")
 
