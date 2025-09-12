@@ -2,6 +2,7 @@ import json
 import os
 from datetime import timedelta
 from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -164,6 +165,13 @@ def parse_question_data(base_dir: str = ".") -> pd.DataFrame:
     """
     Parse JSON files and extract id, source, forecast_due_date,
     question_set, and freeze_datetime_value into a DataFrame.
+
+    Args:
+        base_dir: Directory containing JSON question files (default: current directory)
+
+    Returns:
+        DataFrame with parsed question data including id, source, forecast_due_date,
+        question_set, freeze_datetime_value, and url columns
     """
     data = []
 
@@ -197,7 +205,7 @@ def process_parsed_data(
     df_questions: pd.DataFrame,
     df_model_release_dates: pd.DataFrame,
     imputation_threshold: float,
-    reference_date: str = None,
+    reference_date: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Process parsed forecast and question data.
@@ -205,10 +213,13 @@ def process_parsed_data(
     Args:
         df_forecasts: DataFrame with parsed forecast data
         df_questions: DataFrame with parsed question data
+        df_model_release_dates: DataFrame with model release dates
         imputation_threshold: Maximum allowed fraction of imputed forecasts per model
+        reference_date: Reference date for calculating model activity (default: max resolution date)
 
     Returns:
-        Processed DataFrame
+        Processed DataFrame with additional calculated columns including Brier scores,
+        model activity metrics, and consolidated forecast information
     """
 
     # Filtering
@@ -412,7 +423,21 @@ def process_parsed_data(
 
 def get_diff_adj_brier(
     df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
-):
+) -> pd.DataFrame:
+    """
+    Calculate difficulty-adjusted Brier scores using two-way fixed effects estimation.
+
+    Args:
+        df: DataFrame with forecast data including brier_score, question_id, and model columns
+        max_model_days_released: Maximum days since model release for inclusion
+        drop_baseline_models: List of baseline model names to exclude from estimation
+
+    Returns:
+        DataFrame with added question_fe and diff_adj_brier_score columns
+
+    Raises:
+        ValueError: If estimated question fixed effects don't match expected number of questions
+    """
     df = df.copy()
     df_fe_model = df.copy()
 
@@ -446,8 +471,19 @@ def get_diff_adj_brier(
 
 def compute_diff_adj_scores(
     df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
-):
-    """Compute diff-adj Brier scores for all questions"""
+) -> pd.DataFrame:
+    """
+    Compute difficulty-adjusted Brier scores for all questions, processing
+    market and dataset questions separately.
+
+    Args:
+        df: DataFrame with forecast data including market_question indicator
+        max_model_days_released: Maximum days since model release for inclusion in estimation
+        drop_baseline_models: List of baseline model names to exclude from estimation
+
+    Returns:
+        DataFrame with difficulty-adjusted Brier scores for both market and dataset questions
+    """
     df = df.copy()
 
     # Process market and dataset questions separately
@@ -477,7 +513,7 @@ def create_leaderboard(
     df_with_scores: pd.DataFrame,
     min_days_active_market: int = None,
     min_days_active_dataset: int = None,
-):
+) -> pd.DataFrame:
     """Aggregate diff-adj scores into leaderboard with
      (potentially) activity filters.
 
@@ -580,7 +616,7 @@ def _save_and_plot_results(
     viz_config: dict,
     metric_labels: dict,
     output_suffix: str = "",
-):
+) -> None:
     """Save and plot with configuration support"""
 
     # Save results with suffix to avoid conflicts
@@ -661,7 +697,7 @@ def perform_stability_analysis(
     viz_config: dict = None,
     metric_labels: dict = None,
     output_suffix: str = "",
-):
+) -> None:
     """
     Enhanced stability analysis with configurable metrics
 
@@ -778,7 +814,7 @@ def perform_sample_size_analysis(
     max_thresholds: int = 250,
     max_days: int = 181,
     output_suffix: str = "",
-):
+) -> None:
     """
     Perform sample size analysis to determine how many days are needed
     for 80% of models to reach a certain number of resolved questions.
