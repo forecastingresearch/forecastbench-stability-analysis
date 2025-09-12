@@ -514,13 +514,21 @@ def create_leaderboard(
     min_days_active_market: int = None,
     min_days_active_dataset: int = None,
 ) -> pd.DataFrame:
-    """Aggregate diff-adj scores into leaderboard with
-     (potentially) activity filters.
+    """
+    Create aggregated leaderboard from difficulty-adjusted scores with optional activity filters.
+
+    Aggregates model performance across market and dataset questions, applying minimum
+    activity thresholds if specified. Models below activity thresholds will show NaN
+    for the corresponding metric categories.
 
     Args:
-        df_with_scores: DataFrame with diff-adj scores
-        min_days_active_market: Min days active to show market scores
-        min_days_active_dataset: Min days active to show dataset scores"""
+        df_with_scores: DataFrame with computed difficulty-adjusted scores
+        min_days_active_market: Minimum days active required to include market scores (optional)
+        min_days_active_dataset: Minimum days active required to include dataset scores (optional)
+
+    Returns:
+        DataFrame with aggregated scores, forecast counts, confidence intervals, and activity metrics
+    """
     df = df_with_scores.copy()
 
     # Create base dataframe
@@ -940,6 +948,23 @@ def generate_trendline_graph(
     results_folder: str = "",
     output_suffix: str = "",
 ) -> None:
+    """
+    Generate CSV data for the interactive trendline graph visualization.
+
+    Creates a CSV file with model performance data over time, formatted for use
+    with the trendline_graph.html interactive visualization. The output includes
+    difficulty-adjusted Brier scores, sample sizes, confidence intervals, and
+    release dates for all models.
+
+    Args:
+        df_with_scores: DataFrame with computed difficulty-adjusted scores
+        df_leaderboard: DataFrame with leaderboard data including aggregated scores
+        results_folder: Directory to save the trendline CSV file
+        output_suffix: Suffix to add to the output filename (e.g., "_baseline")
+
+    Returns:
+        None (saves CSV file to results_folder/trendline_graph_{suffix}.csv)
+    """
     # Collect all required data
     df_trendline = df_leaderboard[
         [

@@ -7,7 +7,9 @@ This repository contains tools for analyzing the stability of leaderboards on Fo
 ```
 forecastbench-stability-analysis/
 ├── src/
-│   └── stability_analysis.py    # Core analysis functions and classes
+│   ├── stability_analysis.py    # Core analysis functions and classes
+│   ├── leaderboard_viewer.html  # Interactive results viewer
+│   └── trendline_graph.html     # Interactive trend visualization
 ├── data/
 │   ├── raw/
 │   │   ├── forecast_sets/       # Forecast JSON files organized by date
@@ -16,7 +18,6 @@ forecastbench-stability-analysis/
 │   ├── processed/               # Intermediate processed data
 │   └── results/                 # Analysis outputs and visualizations
 ├── run_analysis.py             # Main analysis script
-├── generate_html_viewer.py     # Interactive results viewer generator
 └── notebooks/                  # Development notebooks
 ```
 
@@ -60,7 +61,7 @@ This will:
 3. Calculate difficulty-adjusted Brier scores  
 4. Generate multiple leaderboard configurations
 5. Perform stability and sample size analyses
-6. Create an interactive HTML leaderboard viewer
+6. Create interactive HTML viewers for results exploration and trend visualization
 
 **Expected runtime**: 1-2 minutes on a standard laptop
 
@@ -132,19 +133,40 @@ After running the analysis, you'll find:
 ```
 data/results/
 ├── leaderboard_*.csv                    # Various leaderboard configurations
+├── trendline_graph_*.csv                # Data for trend visualizations
 ├── stability_*_threshold_*.csv          # Stability analysis results
 ├── sample_size_analysis_*.csv           # Sample size analysis results  
 ├── stability_*_*.png                    # Stability metric visualizations
-├── sample_size_analysis_*.png           # Sample size plots
-└── leaderboard_viewer.html              # Interactive results viewer
+└── sample_size_analysis_*.png           # Sample size plots
 ```
 
 ### Key Output Files
 
 - **Leaderboards**: `leaderboard_baseline.csv`, `leaderboard_proposal.csv`, etc.
+- **Trend Data**: `trendline_graph_*.csv` - Performance trends over time by model category
 - **Stability Metrics**: Stability metrics at various thresholds
 - **Sample Size Analysis**: Days needed for models to reach question thresholds
-- **Interactive Viewer**: HTML interface for exploring all results
+
+## Interactive Visualizations
+
+The analysis generates two interactive HTML visualizations:
+
+### Leaderboard Viewer (`leaderboard_viewer.html`)
+- **File Upload**: Drag & drop CSV files for instant visualization
+- **Sorting**: Click column headers to sort by any metric
+- **Filtering**: Search models by name
+- **Smart Formatting**: Automatic numeric formatting and "n.e.d." (not enough data) indicators
+- **Responsive Design**: Works on desktop and mobile devices
+
+### Trend Graph (`trendline_graph.html`)
+- **SOTA Tracking**: Automatically identifies State-of-the-Art models at release
+- **Interactive Filtering**: Toggle between overall/market/dataset performance
+- **Zoom & Pan**: Shift+drag to zoom into time periods, Escape to reset
+- **Benchmark Lines**: Toggle reference lines for human forecaster performance
+- **Trend Analysis**: Linear regression lines for SOTA model progression
+- **Rich Tooltips**: Detailed model information on hover
+
+Both viewers work offline and require no additional setup beyond opening the HTML files in a web browser.
 
 ## Data Format Requirements
 
