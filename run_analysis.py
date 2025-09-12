@@ -175,8 +175,31 @@ def main():
             "name": "leaderboard_proposal.csv",
             "mask": None,
             "min_days_active_market": 50,
-            "min_days_active_dataset": 7,
+            "min_days_active_dataset": 50,
             "stability_analysis": False,
+            "sample_size_analysis": False,
+        },
+        {
+            "name": "leaderboard_proposal_baseline.csv",
+            "mask": (
+                df["model"].apply(lambda x: "freeze" not in x)
+                & df["model"].apply(lambda x: "news" not in x)
+            ),
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 50,
+            "stability_analysis": True,
+            "sample_size_analysis": False,
+        },
+        {
+            "name": "leaderboard_proposal_tournament.csv",
+            "mask": (
+                df["model"].apply(lambda x: "freeze" in x)
+                | df["model"].apply(lambda x: "news" in x)
+                | (df["organization"] == "ForecastBench")
+            ),
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 50,
+            "stability_analysis": True,
             "sample_size_analysis": False,
         },
     ]
