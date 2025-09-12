@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SOTA Models Over Time</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+  /* ---------- THEME VARIABLES (site can override these later) ---------- */
+  :root{
+    --sota-bg: #ffffff;
+    --sota-text: #1f2a37;
+    --sota-grid: #eef2f6;
+    --sota-axes: #6b7280;
+    --sota-point: #93a3b5;       /* non-SOTA dots */
+    --sota-sota: #d65936;        /* SOTA fill */
+    --sota-sota-ring: #d65936;   /* SOTA ring */
+    --sota-error: #b94725;       /* error bars */
+    --sota-ref: #94a3b8;         /* reference line labels */
+    --sota-ref-line: #d1d5db;    /* reference line stroke */
+    --sota-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  }
+
+  html, body { margin:0; padding:0; background:var(--sota-bg); color:var(--sota-text); font-family:var(--sota-font); }
+  .wrap { max-width: 1100px; margin: 24px auto 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; margin: 0 0 6px 0; font-weight: 650; }
+  .sub { color: var(--sota-text); font-size: 13px; margin-bottom: 12px; }
+  /* Consistent dropdown styling for both native select and custom dropdown */
+  select, .benchmark-button {
+    color: var(--sota-text);
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 1.2;
+    vertical-align: middle;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+  
+  select:focus, .benchmark-button:hover {
+    outline: none;
+    border-color: #93a3b5;
+  }
+  
+  option { color: var(--sota-text); }
+
+  /* Custom benchmark dropdown styles */
+  .benchmark-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .benchmark-button {
+    /* Additional styling specific to custom dropdown */
+    cursor: pointer;
+    min-width: 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .benchmark-dropdown-content {
+    display: none;
+    position: absolute;
+    background: var(--sota-bg);
+    min-width: 200px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    z-index: 1000;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    margin-top: 2px;
+  }
+  .benchmark-dropdown.open .benchmark-dropdown-content {
+    display: block;
+  }
+  .benchmark-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--sota-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .benchmark-option:hover {
+    background: var(--sota-grid);
+  }
+  .benchmark-option input[type="checkbox"] {
+    margin: 0;
+  }
+  .dropdown-arrow {
+    font-size: 10px;
+    color: #666;
+  }
+
+  /* SVG styles */
+  .grid line { stroke: var(--sota-grid); stroke-width: 1; }
+  .axis path, .axis line { stroke: var(--sota-axes); stroke-width: 1; shape-rendering: crispEdges; }
+  .axis text { fill: var(--sota-text); font-size: 12px; }
+  .ylabel, .xlabel { fill: var(--sota-text); font-size: 12px; }
+
+  .refline { stroke: var(--sota-text); stroke-width: 1; stroke-dasharray: 4 4; }
+  .reflabel { fill: var(--sota-text); font-size: 12px; }
+  .trend-line { stroke: var(--sota-sota); stroke-width: 2; stroke-dasharray: 8,4; opacity: 0.7; }
+  .legend-text { fill: var(--sota-text); font-size: 11px; }
+
+  .point-all { fill: var(--sota-point); fill-opacity: 0.9; }
+  .point-sota { fill: var(--sota-sota); }
+  .point-ring { fill: none; stroke: var(--sota-sota-ring); stroke-width: 2; }
+  .errorbar { stroke: var(--sota-error); stroke-width: 2; }
+  .lab { font-size: 11px; text-anchor: middle; fill: var(--sota-text); }
+
+  .tooltip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .12s ease-out;
+    background: #0b1220; color: white; font-size: 12px; line-height: 1.35; padding: 8px 10px; border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.25);
+  }
+
+  .selection-rect {
+    fill: rgba(66, 139, 202, 0.15);
+    stroke: rgba(66, 139, 202, 0.8);
+    stroke-width: 1;
+    stroke-dasharray: 5,5;
+  }
+
+  /* Drag & drop fallback UI when local file fetch is blocked */
+  .drop {
+    display:none; margin-top: 10px; border: 1.5px dashed #cbd5e1; border-radius: 10px;
+    padding: 14px; color: var(--sota-text); font-size: 13px; text-align:center;
+  }
+  .drop.show { display:block; }
+  .drop strong { color: var(--sota-text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ForecastBench: Forecasting Performance of Large Language Models</h1>
+  <div class="sub"></div>
+  <div style="display:flex; align-items:center; gap:16px; margin: 8px 0 12px 0; flex-wrap: wrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="sub" style="margin:0;">Question Source</div>
+      <select id="typeSelect">
+        <option value="overall" selected>All</option>
+        <option value="dataset">Dataset</option>
+        <option value="market">Market</option>
+      </select>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="sub" style="margin:0;">Benchmarks</div>
+      <div class="benchmark-dropdown" id="benchmarkDropdown">
+        <div class="benchmark-button" id="benchmarkButton">
+          <span id="benchmarkLabel">Public, Superforecaster, Always 0.5</span>
+          <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="benchmark-dropdown-content">
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_public" value="public" checked>
+            <label for="bench_public">Public</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_superforecaster" value="superforecaster" checked>
+            <label for="bench_superforecaster">Superforecaster</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_always_0.5" value="always_0.5" checked>
+            <label for="bench_always_0.5">Always 0.5</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_imputed" value="imputed">
+            <label for="bench_imputed">Imputed Forecaster</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_naive" value="naive">
+            <label for="bench_naive">Naive Forecaster</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_always_0" value="always_0">
+            <label for="bench_always_0">Always 0</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_always_1" value="always_1">
+            <label for="bench_always_1">Always 1</label>
+          </div>
+          <div class="benchmark-option">
+            <input type="checkbox" id="bench_random_uniform" value="random_uniform">
+            <label for="bench_random_uniform">Random Uniform</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="includeFreeze" checked style="margin:0;">
+      <label for="includeFreeze" class="sub" style="margin:0; cursor:pointer;">Include "freeze-value" prompts</label>
+    </div>
+  </div>
+  <div id="chart"></div>
+  <div id="drop" class="drop">Couldn’t auto-load <strong>trendline_graph.csv</strong> (some browsers block local file reads).<br>
+    Drag & drop your <strong>trendline_graph.csv</strong> here, or run <code>python -m http.server</code> in this folder and refresh.
+  </div>
+</div>
+
+<div id="tip" class="tooltip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+(function(){
+  const CSV_PATH = 'trendline_graph.csv';   // looks in the same folder
+  const Y_DOMAIN = [0.05, 0.35];            // configurable (lower = better)
+  const SHOW_REFS = true;                   // baseline lines
+
+  const fmt = d3.format('.3f');
+  const fmtDate = d3.timeFormat('%Y-%m-%d');
+  // Format with 3 decimals; if that would display as 0.000, use 4 decimals
+  const fmt3or4 = (v) => {
+    const s3 = fmt(v);
+    if (s3 === '0.000' || s3 === '-0.000') return d3.format('.4f')(v);
+    return s3;
+  };
+
+  const dropEl = document.getElementById('drop');
+  const tip = d3.select('#tip');
+
+  // --- Short label mapping for SOTA annotations ---
+  function shortLabel(name){
+    const base = name.split(' (')[0];
+    const map = [
+      [/gpt-4\.5/i, 'GPT-4.5'],
+      [/gpt-4o/i, 'GPT-4o'],
+      [/gpt-4\.1/i, 'GPT-4.1'],
+      [/gpt-4-turbo/i, 'GPT-4 Turbo'],
+      [/gpt-4/i, 'GPT-4'],
+      [/gpt-3\.5/i, 'GPT-3.5'],
+      [/claude-(\d+(?:-\d+)?)-?(sonnet|opus|haiku)/i, (_,v,variant)=> {
+        const version = v.replace('-', '.');
+        const variantName = variant.charAt(0).toUpperCase() + variant.slice(1).toLowerCase();
+        return `Claude ${version} ${variantName}`;
+      }],
+      [/claude-?(\d(?:\.\d)?)?/i, (_,v)=> v?`Claude ${v}`:'Claude'],
+      [/gemini-?(\d(?:\.\d)?)?/i, (_,v)=> v?`Gemini ${v}`:'Gemini'],
+      [/llama-?(\d(?:\.\d)?)?/i,  (_,v)=> v?`Llama ${v}`:'Llama'],
+      [/grok[- ]?(\d(?:\.\d)?)?/i, (_,v)=> v?`Grok ${v}`:'Grok'],
+      [/deepseek[- ]?(r1|v3|coder|chat)?/i,(_,v)=> `DeepSeek${v?' '+v.toUpperCase():''}`],
+      [/mistral(?:[- ]large)?/i, (m)=> m.replace('-',' ')],
+      [/mixtral/i, 'Mixtral'],
+      [/o3[- ]?mini/i, 'o3-mini'],
+      [/o3\b/i, 'o3'],
+    ];
+    for (const [re,val] of map){
+      const m = base.match(re); if (m) return (typeof val==='function')? val(...m): val;
+    }
+    return base.split(/[-_ ]+/).slice(0,2).join(' ').slice(0,18);
+  }
+
+  // --- Compute SOTA-at-release flag; constrain to at most one SOTA per day ---
+  function markSOTA(rows){
+    rows.sort((a,b)=> d3.ascending(a.release_date,b.release_date));
+    const pad = n => String(n).padStart(2,'0');
+    const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const byDate = d3.group(rows, r => dateKey(r.release_date));
+    let best = Infinity, tol = 1e-12;
+    for (const [, sameDayRows] of Array.from(byDate).sort((a,b)=> d3.ascending(a[0], b[0]))){
+      sameDayRows.forEach(r => { r.is_sota_at_release = false; });
+      sameDayRows.sort((a,b)=> {
+        const scoreComp = d3.ascending(a.overall_score, b.overall_score);
+        if (scoreComp !== 0) return scoreComp;
+        // If scores are equal, sort by model name for consistency
+        return d3.ascending(a.model, b.model);
+      });
+      const bestOfDay = sameDayRows[0]?.overall_score;
+      if (bestOfDay !== undefined && bestOfDay < best - tol){
+        sameDayRows[0].is_sota_at_release = true; // only one per day, the best
+        best = Math.min(best, bestOfDay);
+      }
+    }
+  }
+
+  // --- Global variables for zoom and selection ---
+  let currentXDomain = null;
+  let currentYDomain = null;
+  let isSelecting = false;
+  let selectionStart = null;
+  let selectionRect = null;
+  let isShiftPressed = false;
+  let updateOverlayInteraction = null;
+
+  // --- Main draw ---
+  function draw(data, baselines = {}, showErrorBars = false, currentType = 'overall'){
+    const container = document.getElementById('chart');
+    container.innerHTML = '';  // clear for re-render (drag-drop)
+    const W = Math.min(container.clientWidth || 1100, 1100);
+    const H = 560;
+    const margin = {top: 16, right: 24, bottom: 60, left: 64};
+    const width = W - margin.left - margin.right;
+    const height = H - margin.top - margin.bottom;
+
+    const svg = d3.select(container).append('svg')
+      .attr('viewBox', `0 0 ${W} ${H}`)
+      .attr('width', '100%')
+      .attr('height', H)
+      .attr('role','img')
+      .attr('aria-label','SOTA models over time');
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Extend x-axis domain by 1 month on each side
+    const [minDate, maxDate] = d3.extent(data, d => d.release_date);
+    const extendedMinDate = new Date(minDate.getFullYear(), minDate.getMonth() - 2, minDate.getDate());
+    const extendedMaxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, maxDate.getDate());
+    
+    // Use current zoom domains if they exist, otherwise use default
+    const xDomain = currentXDomain || [extendedMinDate, extendedMaxDate];
+    const yDomain = currentYDomain || Y_DOMAIN;
+    
+    const x = d3.scaleTime()
+      .domain(xDomain)
+      .range([0, width]);
+
+    const y = d3.scaleLinear()
+      .domain(yDomain).nice()
+      .range([height, 0]);
+
+    // grid
+    g.append('g').attr('class','grid')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).ticks(10).tickSize(-height).tickFormat(''))
+      .selectAll('line').attr('stroke-opacity',1);
+    g.append('g').attr('class','grid')
+      .call(d3.axisLeft(y).ticks(8).tickSize(-width).tickFormat(''))
+      .selectAll('line').attr('stroke-opacity',1);
+
+    // axes
+    g.append('g').attr('class','axis')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickFormat(d3.timeFormat('%b %Y')));
+    g.append('g').attr('class','axis').call(d3.axisLeft(y));
+
+    // axis labels
+    g.append('text').attr('class','xlabel').attr('x', width/2).attr('y', height+44)
+      .attr('text-anchor','middle').text('Model Release Date');
+    g.append('text').attr('class','ylabel')
+      .attr('transform','rotate(-90)')
+      .attr('x', -height/2).attr('y', -46)
+      .attr('text-anchor','middle')
+      .text('Difficulty-Adjusted Brier Score (Lower = Better)');
+
+    // reference lines based on selected benchmarks
+    if (SHOW_REFS){
+      const selectedBenchmarks = getSelectedBenchmarks();
+      const refs = [];
+      
+      // Add reference lines for selected benchmarks
+      if (selectedBenchmarks.includes('always_0.5')) {
+        refs.push({y:0.25, label:'Always 0.5', key:'always_0.5'});
+      }
+      if (selectedBenchmarks.includes('public') && baselines.public !== undefined) {
+        refs.push({y:baselines.public, label:'Public', key:'public'});
+      }
+      if (selectedBenchmarks.includes('superforecaster') && baselines.superforecaster !== undefined) {
+        refs.push({y:baselines.superforecaster, label:'Superforecaster', key:'superforecaster'});
+      }
+      if (selectedBenchmarks.includes('imputed') && baselines.imputed !== undefined) {
+        refs.push({y:baselines.imputed, label:'Imputed Forecaster', key:'imputed'});
+      }
+      if (selectedBenchmarks.includes('naive') && baselines.naive !== undefined) {
+        refs.push({y:baselines.naive, label:'Naive Forecaster', key:'naive'});
+      }
+      if (selectedBenchmarks.includes('always_0') && baselines.always_0 !== undefined) {
+        refs.push({y:baselines.always_0, label:'Always 0', key:'always_0'});
+      }
+      if (selectedBenchmarks.includes('always_1') && baselines.always_1 !== undefined) {
+        refs.push({y:baselines.always_1, label:'Always 1', key:'always_1'});
+      }
+      if (selectedBenchmarks.includes('random_uniform') && baselines.random_uniform !== undefined) {
+        refs.push({y:baselines.random_uniform, label:'Random Uniform', key:'random_uniform'});
+      }
+      for (const r of refs){
+        g.append('line').attr('class','refline')
+         .attr('x1',0).attr('x2',width).attr('y1',y(r.y)).attr('y2',y(r.y));
+        g.append('text').attr('class','reflabel')
+         .attr('x',4).attr('y',y(r.y)-4).text(r.label);
+        
+        // Add invisible hover area for tooltip
+        g.append('rect')
+         .attr('x', 0).attr('width', width)
+         .attr('y', y(r.y) - 8).attr('height', 16)
+         .attr('fill', 'transparent')
+         .style('cursor', 'pointer')
+         .on('mouseenter', (ev) => tipOn(ev, referenceTooltipHTML(r.label, r.y, baselines, currentType, r.key)))
+         .on('mouseleave', tipOff);
+      }
+    }
+
+    function tipOn(event, html){
+      if (isSelecting) return;
+      tip.html(html).style('opacity',1);
+      const [mx, my] = d3.pointer(event, document.body);
+      tip.style('left', (mx+12)+'px').style('top', (my+12)+'px');
+    }
+    function tipOff(){ 
+      if (isSelecting) return;
+      tip.style('opacity',0); 
+    }
+
+    // points not SOTA
+    const rest = data.filter(d => !d.is_sota_at_release);
+    g.selectAll('.point-all').data(rest).join('circle')
+      .attr('class','point-all')
+      .attr('r', 4.5)
+      .attr('cx', d => x(d.release_date))
+      .attr('cy', d => y(d.overall_score))
+      .on('mouseenter', (ev,d) => tipOn(ev, tooltipHTML(d)))
+      .on('mouseleave', tipOff);
+
+    // SOTA error bars with horizontal caps
+    const sota = data.filter(d => d.is_sota_at_release);
+    
+    // Calculate linear regression for SOTA models using months since first SOTA
+    function calculateRegressionMonthsSinceFirst(sotaData) {
+      const n = sotaData.length;
+      if (n < 2) return null;
+      const firstDate = d3.min(sotaData, d => d.release_date);
+      // x = months since first SOTA model; months ~= days/30
+      const xVals = sotaData.map(d => (d.release_date - firstDate) / (1000 * 60 * 60 * 24 * 30));
+      const yVals = sotaData.map(d => d.overall_score);
+      const xMean = d3.mean(xVals);
+      const yMean = d3.mean(yVals);
+      let numerator = 0;
+      let denominator = 0;
+      for (let i = 0; i < n; i++) {
+        const xDiff = xVals[i] - xMean;
+        const yDiff = yVals[i] - yMean;
+        numerator += xDiff * yDiff;
+        denominator += xDiff * xDiff;
+      }
+      const slopePerMonth = numerator / denominator; // b
+      const interceptAtMonth0 = yMean - slopePerMonth * xMean; // a
+      return { a: interceptAtMonth0, b: slopePerMonth, firstDate, n };
+    }
+    
+    const regression = calculateRegressionMonthsSinceFirst(sota);
+    
+    // Add regression trend line and hover area + tooltip
+    if (regression && sota.length >= 2) {
+      const firstSotaDate = regression.firstDate;
+      const lastDate = maxDate;
+      
+      // Use current x domain for trend line boundaries
+      const [currentXMin, currentXMax] = x.domain();
+      const trendStartDate = new Date(Math.max(firstSotaDate.getTime(), currentXMin.getTime()));
+      const trendEndDate = new Date(Math.min(lastDate.getTime(), currentXMax.getTime()));
+      
+      // Compute y along the line using months since first SOTA
+      function yOnTrend(date){
+        const months = (date - firstSotaDate) / (1000 * 60 * 60 * 24 * 30);
+        return regression.a + regression.b * months;
+      }
+      const yStart = yOnTrend(trendStartDate);
+      const yEnd = yOnTrend(trendEndDate);
+      
+      // Visible trend line
+      const trendLine = g.append('line')
+        .attr('class', 'trend-line')
+        .attr('x1', x(trendStartDate))
+        .attr('y1', y(yStart))
+        .attr('x2', x(trendEndDate))
+        .attr('y2', y(yEnd))
+        .style('stroke', 'var(--sota-sota)')
+        .style('stroke-width', '2')
+        .style('stroke-dasharray', '8,4')
+        .style('opacity', '0.7');
+
+      // Add wider invisible hit area for tooltip interactions
+      const trendHit = g.append('line')
+        .attr('x1', x(trendStartDate))
+        .attr('y1', y(yStart))
+        .attr('x2', x(trendEndDate))
+        .attr('y2', y(yEnd))
+        .attr('stroke', 'transparent')
+        .attr('stroke-width', 14)
+        .style('cursor', 'pointer')
+        .on('mouseenter', (ev) => {
+          const html = trendTooltipHTML(regression);
+          tipOn(ev, html);
+        })
+        .on('mouseleave', tipOff);
+    }
+    
+    if (showErrorBars) {
+      // Vertical line for error bars
+      g.selectAll('.errorbar').data(sota).join('line')
+        .attr('class','errorbar')
+        .attr('x1', d => x(d.release_date)).attr('x2', d => x(d.release_date))
+        .attr('y1', d => y(d.conf_int_lb)).attr('y2', d => y(d.conf_int_ub));
+      
+      // Top horizontal caps
+      g.selectAll('.errorbar-top').data(sota).join('line')
+        .attr('class','errorbar')
+        .attr('x1', d => x(d.release_date) - 3).attr('x2', d => x(d.release_date) + 3)
+        .attr('y1', d => y(d.conf_int_ub)).attr('y2', d => y(d.conf_int_ub));
+      
+      // Bottom horizontal caps
+      g.selectAll('.errorbar-bottom').data(sota).join('line')
+        .attr('class','errorbar')
+        .attr('x1', d => x(d.release_date) - 3).attr('x2', d => x(d.release_date) + 3)
+        .attr('y1', d => y(d.conf_int_lb)).attr('y2', d => y(d.conf_int_lb));
+    }
+
+    // SOTA points (same size as non-SOTA, different color only)
+    const sg = g.append('g');
+    sg.selectAll('circle.sota').data(sota).join('circle')
+      .attr('class','point-sota')
+      .attr('r', 4.5)
+      .attr('cx', d => x(d.release_date))
+      .attr('cy', d => y(d.overall_score))
+      .on('mouseenter', (ev,d) => tipOn(ev, tooltipHTML(d)))
+      .on('mouseleave', tipOff);
+
+    // SOTA labels with simple collision-avoidance (keep newest labels)
+    const labels = sg.selectAll('text.lab').data(sota).join('text')
+      .attr('class','lab')
+      .attr('x', d => x(d.release_date))
+      .attr('y', d => y(Number.isFinite(d.conf_int_lb) ? d.conf_int_lb : d.overall_score) + 20)
+      .text(d => shortLabel(d.model));
+
+    const nodes = labels.nodes()
+      .map((node,i)=>({node, d:sota[i]}))
+      .sort((a,b)=> d3.descending(a.d.release_date, b.d.release_date));
+    const kept = [];
+    for (const {node} of nodes){
+      const bb = node.getBBox();
+      const x0 = +node.getAttribute('x') - bb.width/2;
+      const y0 = +node.getAttribute('y') - bb.height/2;
+      const box = {x:x0, y:y0, w:bb.width, h:bb.height};
+      const collide = kept.some(k => !(box.x+box.w<k.x || k.x+k.w<box.x || box.y+box.h<k.y || k.y+k.h<box.y));
+      if (!collide) kept.push(box); else node.style.display = 'none';
+    }
+    
+    // Add legend
+    const legendX = width - 150;
+    const legendY = 20;
+    const legend = g.append('g')
+      .attr('class', 'legend')
+      .attr('transform', `translate(${legendX}, ${legendY})`);
+    
+    // Legend background
+    legend.append('rect')
+      .attr('x', -8)
+      .attr('y', -8)
+      .attr('width', 145)
+      .attr('height', 68)
+      .attr('fill', 'var(--sota-bg)')
+      .attr('stroke', 'var(--sota-grid)')
+      .attr('stroke-width', 1)
+      .attr('rx', 4);
+    
+    // Trend line sample
+    if (regression && sota.length >= 2) {
+      legend.append('line')
+        .attr('x1', 5).attr('x2', 25)
+        .attr('y1', 8).attr('y2', 8)
+        .attr('class', 'trend-line');
+      legend.append('text')
+        .attr('x', 30).attr('y', 12)
+        .attr('class', 'legend-text')
+        .text('Linear Trend');
+    }
+    
+    // SOTA model sample
+    legend.append('circle')
+      .attr('cx', 15).attr('cy', 28)
+      .attr('r', 4.5)
+      .attr('class', 'point-sota');
+    legend.append('text')
+      .attr('x', 30).attr('y', 32)
+      .attr('class', 'legend-text')
+      .text('SOTA Model');
+    
+    // Non-SOTA model sample
+    legend.append('circle')
+      .attr('cx', 15).attr('cy', 48)
+      .attr('r', 4.5)
+      .attr('class', 'point-all');
+    legend.append('text')
+      .attr('x', 30).attr('y', 52)
+      .attr('class', 'legend-text')
+      .text('Non-SOTA Model');
+
+    function tooltipHTML(d){
+      const hasCI = Number.isFinite(d.conf_int_lb) && Number.isFinite(d.conf_int_ub);
+      const hasN = Number.isFinite(d.sample_size);
+      return `
+        <div><strong>${d.model}</strong></div>
+        <div>Release Date: ${fmtDate(d.release_date)}</div>
+        <div>Diff-Adj. Brier: ${fmt(d.overall_score)}</div>
+        ${hasCI ? `<div>95% CI: [${fmt(d.conf_int_lb)}, ${fmt(d.conf_int_ub)}]</div>` : ''}
+        ${hasN ? `<div>Sample Size: ${d.sample_size}</div>` : ''}
+      `;
+    }
+    
+    function referenceTooltipHTML(label, score, baselines, baselineType, key) {
+      let title, hasCI = false, lb, ub;
+      let baselineRow = null;
+      let modelName = null;
+      
+      // Map benchmark keys to model names and titles
+      const benchmarkConfig = {
+        'always_0.5': { title: 'Always Predict 0.5', model: null },
+        'public': { title: 'Public Median Forecast', model: 'Public median forecast' },
+        'superforecaster': { title: 'Superforecaster Median Forecast', model: 'Superforecaster median forecast' },
+        'imputed': { title: 'Imputed Forecaster', model: 'Imputed Forecaster' },
+        'naive': { title: 'Naive Forecaster', model: 'Naive Forecaster' },
+        'always_0': { title: 'Always Predict 0', model: 'Always 0' },
+        'always_1': { title: 'Always Predict 1', model: 'Always 1' },
+        'random_uniform': { title: 'Random Uniform Prediction', model: 'Random Uniform' }
+      };
+      
+      const config = benchmarkConfig[key] || { title: label, model: null };
+      title = config.title;
+      modelName = config.model;
+      
+      if (modelName) {
+        baselineRow = originalRows.find(d => d.model === modelName && (d.type||'').trim().toLowerCase() === baselineType);
+        // Get CI from original CSV data, but only show for 'overall'
+        if (baselineRow && baselineType === 'overall') {
+          const lbRaw = baselineRow.conf_int_lb;
+          const ubRaw = baselineRow.conf_int_ub;
+          const lbNum = (lbRaw === undefined || lbRaw === null || String(lbRaw).trim() === '') ? NaN : +lbRaw;
+          const ubNum = (ubRaw === undefined || ubRaw === null || String(ubRaw).trim() === '') ? NaN : +ubRaw;
+          if (Number.isFinite(lbNum) && Number.isFinite(ubNum)) {
+            lb = lbNum;
+            ub = ubNum;
+            hasCI = true;
+          }
+        }
+      }
+      
+      // Parse sample size for the selected baseline and type
+      let hasN = false, nVal;
+      if (baselineRow) {
+        const nRaw = baselineRow.sample_size;
+        const nNum = (nRaw === undefined || nRaw === null || String(nRaw).trim() === '') ? NaN : +nRaw;
+        if (Number.isFinite(nNum)) {
+          hasN = true;
+          nVal = nNum;
+        }
+      }
+      
+      let html = `
+        <div><strong>${title}</strong></div>
+        <div>Diff-Adj. Brier: ${fmt(score)}</div>
+      `;
+      
+      if (hasCI) {
+        html += `<div>95% CI: [${fmt(lb)}, ${fmt(ub)}]</div>`;
+      }
+      if (hasN) {
+        html += `<div>Sample Size: ${nVal}</div>`;
+      }
+      
+      return html;
+    }
+
+    // --- Rectangle selection functionality ---
+    // Add an overlay that only captures events when SHIFT is pressed
+    const selectionOverlay = g.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', 'transparent')
+      .style('cursor', 'default')
+      .style('pointer-events', 'none') // Initially let events pass through
+      .on('mousedown', function(event) {
+        if (event.button !== 0 || !isShiftPressed) return; // Only left mouse button + SHIFT
+        event.preventDefault();
+        isSelecting = true;
+        tipOff(); // Hide any existing tooltip
+        
+        const [mouseX, mouseY] = d3.pointer(event, this);
+        selectionStart = {x: mouseX, y: mouseY};
+        
+        if (selectionRect) {
+          selectionRect.remove();
+        }
+        
+        selectionRect = g.append('rect')
+          .attr('class', 'selection-rect')
+          .attr('x', mouseX)
+          .attr('y', mouseY)
+          .attr('width', 0)
+          .attr('height', 0);
+      });
+    
+    // Function to update overlay behavior based on SHIFT state
+    updateOverlayInteraction = function() {
+      selectionOverlay
+        .style('pointer-events', isShiftPressed ? 'all' : 'none')
+        .style('cursor', isShiftPressed ? 'crosshair' : 'default');
+    };
+    
+    updateOverlayInteraction();
+
+    // Add mousemove and mouseup to the SVG to handle events outside the selection area
+    svg.on('mousemove', function(event) {
+      if (!isSelecting || !selectionStart || !selectionRect) return;
+      
+      const [mouseX, mouseY] = d3.pointer(event, g.node());
+      const x1 = Math.min(selectionStart.x, mouseX);
+      const y1 = Math.min(selectionStart.y, mouseY);
+      const x2 = Math.max(selectionStart.x, mouseX);
+      const y2 = Math.max(selectionStart.y, mouseY);
+      
+      // Constrain to chart bounds
+      const constrainedX1 = Math.max(0, Math.min(width, x1));
+      const constrainedY1 = Math.max(0, Math.min(height, y1));
+      const constrainedX2 = Math.max(0, Math.min(width, x2));
+      const constrainedY2 = Math.max(0, Math.min(height, y2));
+      
+      selectionRect
+        .attr('x', constrainedX1)
+        .attr('y', constrainedY1)
+        .attr('width', constrainedX2 - constrainedX1)
+        .attr('height', constrainedY2 - constrainedY1);
+    })
+    .on('mouseup', function(event) {
+      if (!isSelecting || !selectionStart || !selectionRect) return;
+      
+      const [mouseX, mouseY] = d3.pointer(event, g.node());
+      const x1 = Math.min(selectionStart.x, mouseX);
+      const y1 = Math.min(selectionStart.y, mouseY);
+      const x2 = Math.max(selectionStart.x, mouseX);
+      const y2 = Math.max(selectionStart.y, mouseY);
+      
+      // Constrain to chart bounds
+      const constrainedX1 = Math.max(0, Math.min(width, x1));
+      const constrainedY1 = Math.max(0, Math.min(height, y1));
+      const constrainedX2 = Math.max(0, Math.min(width, x2));
+      const constrainedY2 = Math.max(0, Math.min(height, y2));
+      
+      // Only zoom if selection has meaningful size (at least 10px in both dimensions)
+      if (Math.abs(constrainedX2 - constrainedX1) >= 10 && Math.abs(constrainedY2 - constrainedY1) >= 10) {
+        // Convert pixel coordinates back to data coordinates
+        const newXDomain = [x.invert(constrainedX1), x.invert(constrainedX2)];
+        const newYDomain = [y.invert(constrainedY2), y.invert(constrainedY1)]; // y is flipped
+        
+        // Update current domains
+        currentXDomain = newXDomain;
+        currentYDomain = newYDomain;
+        
+        // Redraw with new zoom
+        draw(data, baselines, showErrorBars, currentType);
+      }
+      
+      // Clean up selection state
+      if (selectionRect) {
+        selectionRect.remove();
+        selectionRect = null;
+      }
+      isSelecting = false;
+      selectionStart = null;
+    });
+
+    // Tooltip for the trend line
+    function trendTooltipHTML(reg) {
+      const a = reg.a;
+      const b = reg.b;
+      const n = reg.n;
+      // Use consistent formatting for numbers
+      const aStr = fmt3or4(a);
+      const bStr = fmt3or4(b);
+      return `
+        <div><strong>Linear Trend, SOTA Models</strong></div>
+        <div>Formula = ${aStr} + (${bStr}) * (months since first model)</div>
+        <div>Number of SOTA models: ${n}</div>
+      `;
+    }
+  }
+
+  // --- Helper function to get selected benchmarks ---
+  function getSelectedBenchmarks() {
+    const checkboxes = document.querySelectorAll('.benchmark-dropdown input[type="checkbox"]:checked');
+    if (checkboxes.length === 0) return ['public', 'superforecaster', 'always_0.5']; // default fallback
+    return Array.from(checkboxes).map(checkbox => checkbox.value);
+  }
+  
+  // --- Helper function to check if freeze models should be included ---
+  function shouldIncludeFreeze() {
+    const checkbox = document.getElementById('includeFreeze');
+    return checkbox ? checkbox.checked : true; // default to true if checkbox not found
+  }
+  
+  // --- Helper function to filter freeze models ---
+  function filterFreezeModels(rows) {
+    if (shouldIncludeFreeze()) {
+      return rows; // include all models when checked
+    }
+    // Filter out models with "freeze" in their name (case-insensitive)
+    return rows.filter(row => !row.model.toLowerCase().includes('freeze'));
+  }
+  
+  // --- Update benchmark button label ---
+  function updateBenchmarkLabel() {
+    const selected = getSelectedBenchmarks();
+    const label = document.getElementById('benchmarkLabel');
+    if (!label) return;
+    
+    const labelMap = {
+      'public': 'Public',
+      'superforecaster': 'Superforecaster', 
+      'always_0.5': 'Always 0.5',
+      'imputed': 'Imputed Forecaster',
+      'naive': 'Naive Forecaster',
+      'always_0': 'Always 0',
+      'always_1': 'Always 1',
+      'random_uniform': 'Random Uniform'
+    };
+    
+    if (selected.length === 0) {
+      label.textContent = 'Select benchmarks...';
+    } else if (selected.length === 1) {
+      label.textContent = labelMap[selected[0]] || selected[0];
+    } else if (selected.length === 2) {
+      label.textContent = `${labelMap[selected[0]]}, ${labelMap[selected[1]]}`;
+    } else {
+      label.textContent = `${labelMap[selected[0]]}, ${labelMap[selected[1]]} + ${selected.length - 2} more`;
+    }
+  }
+  
+  // --- Load CSV (auto) with drag-drop fallback for file:// ---
+  let originalRows = []; // Store original rows for tooltip access
+  
+  function renderForType(selectedType){
+    const typeNorm = (selectedType || 'overall').trim().toLowerCase();
+    const isType = d => (d.type || '').trim().toLowerCase() === typeNorm;
+    
+    // Apply freeze filter to all data
+    const filteredRows = filterFreezeModels(originalRows);
+    
+    // Baselines of the selected type (always include baselines, they don't have freeze in name)
+    const superforecasterRow = filteredRows.find(d => d.model === 'Superforecaster median forecast' && isType(d));
+    const publicRow = filteredRows.find(d => d.model === 'Public median forecast' && isType(d));
+    const imputedForecastRow = filteredRows.find(d => d.model === 'Imputed Forecaster' && isType(d));
+    const naiveForecastRow = filteredRows.find(d => d.model === 'Naive Forecaster' && isType(d));
+    const always0Row = filteredRows.find(d => d.model === 'Always 0' && isType(d));
+    const always1Row = filteredRows.find(d => d.model === 'Always 1' && isType(d));
+    const randomUniformRow = filteredRows.find(d => d.model === 'Random Uniform' && isType(d));
+    
+    // Data rows of the selected type with dates and valid scores
+    const filtered = filteredRows.filter(d => 
+      isType(d) && 
+      d.release_date && d.release_date.trim() !== '' &&
+      d.diff_adj_brier !== undefined && d.diff_adj_brier !== null && 
+      String(d.diff_adj_brier).trim() !== ''
+    );
+    const toNumOrNaN = v => (v === undefined || v === null || String(v).trim() === '') ? NaN : +v;
+    const parsed = filtered.map(d => ({
+      model: d.model,
+      overall_score: +d.diff_adj_brier,
+      release_date: new Date(d.release_date),
+      conf_int_lb: toNumOrNaN(d.conf_int_lb),
+      conf_int_ub: toNumOrNaN(d.conf_int_ub),
+      sample_size: toNumOrNaN(d.sample_size)
+    }));
+    
+    const baselines = {};
+    if (superforecasterRow) baselines.superforecaster = +superforecasterRow.diff_adj_brier;
+    if (publicRow) baselines.public = +publicRow.diff_adj_brier;
+    if (imputedForecastRow) baselines.imputed = +imputedForecastRow.diff_adj_brier;
+    if (naiveForecastRow) baselines.naive = +naiveForecastRow.diff_adj_brier;
+    if (always0Row) baselines.always_0 = +always0Row.diff_adj_brier;
+    if (always1Row) baselines.always_1 = +always1Row.diff_adj_brier;
+    if (randomUniformRow) baselines.random_uniform = +randomUniformRow.diff_adj_brier;
+    
+    markSOTA(parsed);
+    const showErrorBars = typeNorm === 'overall';
+    draw(parsed, baselines, showErrorBars, typeNorm);
+  }
+  
+  function parseRows(rows){
+    originalRows = rows; // Store for tooltip access
+    // Initialize control to default and render
+    const sel = document.getElementById('typeSelect');
+    const defaultType = (sel && sel.value) ? sel.value : 'overall';
+    renderForType(defaultType);
+  }
+
+  function tryFetch(){
+    d3.csv(CSV_PATH).then(parseRows).catch(err => {
+      console.warn('Could not fetch CSV (likely file:// CORS). Enable drag-drop.', err);
+      enableDropZone();
+    });
+  }
+
+  function enableDropZone(){
+    dropEl.classList.add('show');
+    ['dragenter','dragover'].forEach(ev =>
+      document.body.addEventListener(ev, e => { e.preventDefault(); e.dataTransfer.dropEffect='copy'; })
+    );
+    document.body.addEventListener('drop', e => {
+      e.preventDefault();
+      const f = Array.from(e.dataTransfer.files || []).find(f => /\.csv$/i.test(f.name));
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result;
+        const rows = d3.csvParse(text);
+        dropEl.classList.remove('show');
+        parseRows(rows);
+        updateBenchmarkLabel(); // Update label after data loads
+      };
+      reader.readAsText(f);
+    });
+  }
+
+  // --- Reset zoom function ---
+  function resetZoom() {
+    currentXDomain = null;
+    currentYDomain = null;
+    if (originalRows && originalRows.length) {
+      const typeSelect = document.getElementById('typeSelect');
+      renderForType(typeSelect ? typeSelect.value : 'overall');
+    }
+  }
+
+  // Bind control change after DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const typeSelect = document.getElementById('typeSelect');
+    const benchmarkDropdown = document.getElementById('benchmarkDropdown');
+    const benchmarkButton = document.getElementById('benchmarkButton');
+    
+    // Type select change handler
+    if (typeSelect) {
+      typeSelect.addEventListener('change', () => {
+        if (originalRows && originalRows.length) {
+          renderForType(typeSelect.value);
+        }
+      });
+    }
+    
+    // Benchmark dropdown toggle
+    if (benchmarkButton && benchmarkDropdown) {
+      benchmarkButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        benchmarkDropdown.classList.toggle('open');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', () => {
+        benchmarkDropdown.classList.remove('open');
+      });
+      
+      // Prevent dropdown from closing when clicking inside
+      benchmarkDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
+    
+    // Benchmark checkbox change handlers
+    const benchmarkCheckboxes = document.querySelectorAll('.benchmark-dropdown input[type="checkbox"]');
+    benchmarkCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        updateBenchmarkLabel();
+        if (originalRows && originalRows.length) {
+          renderForType(typeSelect ? typeSelect.value : 'overall');
+        }
+      });
+    });
+    
+    // Freeze models checkbox change handler
+    const freezeCheckbox = document.getElementById('includeFreeze');
+    if (freezeCheckbox) {
+      freezeCheckbox.addEventListener('change', () => {
+        if (originalRows && originalRows.length) {
+          renderForType(typeSelect ? typeSelect.value : 'overall');
+        }
+      });
+    }
+    
+    // Initialize label
+    updateBenchmarkLabel();
+    
+    // Add key handlers for zoom reset and SHIFT detection
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        resetZoom();
+      }
+      if (event.key === 'Shift') {
+        isShiftPressed = true;
+        // Update overlay interaction
+        if (updateOverlayInteraction) updateOverlayInteraction();
+      }
+    });
+    
+    document.addEventListener('keyup', (event) => {
+      if (event.key === 'Shift') {
+        isShiftPressed = false;
+        // Update overlay interaction
+        if (updateOverlayInteraction) updateOverlayInteraction();
+      }
+    });
+  });
+  
+  tryFetch();
+})();
+</script>
+</body>
+</html>

@@ -932,3 +932,88 @@ def perform_sample_size_analysis(
             print(f"Sample size analysis for {name} questions completed:")
             print(f"  - Data saved: {csv_path}")
             print(f"  - Plot saved: {plot_path}")
+
+
+def generate_trendline_graph(
+    df_with_scores: pd.DataFrame,
+    df_leaderboard: pd.DataFrame,
+    results_folder: str = "",
+    output_suffix: str = "",
+) -> None:
+    # Collect all required data
+    df_trendline = df_leaderboard[
+        [
+            "model",
+            "diff_adj_brier_score_market",
+            "diff_adj_brier_score_dataset",
+            "diff_adj_brier_score",
+            "n_forecasts_market",
+            "n_forecasts_dataset",
+        ]
+    ].copy()
+    df_trendline["n_forecasts_overall"] = (
+        df_trendline["n_forecasts_market"] + df_trendline["n_forecasts_dataset"]
+    )
+    df_trendline.rename(
+        columns={"diff_adj_brier_score": "diff_adj_brier_score_overall"}, inplace=True
+    )
+    df_trendline = pd.merge(
+        df_trendline,
+        df_with_scores[["model", "model_release_date"]].drop_duplicates(),
+        how="left",
+        validate="1:1",
+    )
+
+    # Shape the data into the required form
+    # Melt the diff_adj_brier scores
+    df_scores = df_trendline.melt(
+        id_vars=["model", "model_release_date"],
+        value_vars=[
+            "diff_adj_brier_score_market",
+            "diff_adj_brier_score_dataset",
+            "diff_adj_brier_score_overall",
+        ],
+        var_name="type",
+        value_name="diff_adj_brier",
+    )
+
+    # Melt the sample sizes
+    df_counts = df_trendline.melt(
+        id_vars=["model", "model_release_date"],
+        value_vars=["n_forecasts_market", "n_forecasts_dataset", "n_forecasts_overall"],
+        var_name="type",
+        value_name="sample_size",
+    )
+
+    # Extract type from column names
+    df_scores["type"] = df_scores["type"].str.extract(r"diff_adj_brier_score_(\w+)")
+    df_counts["type"] = df_counts["type"].str.extract(r"n_forecasts_(\w+)")
+
+    # Merge scores and counts
+    df_final = pd.merge(
+        df_scores, df_counts[["model", "type", "sample_size"]], on=["model", "type"]
+    )
+
+    # Add confidence interval columns and rename
+    df_final["conf_int_lb"] = np.nan
+    df_final["conf_int_ub"] = np.nan
+    df_final = df_final.rename(columns={"model_release_date": "release_date"})
+
+    # Reorder columns & sort
+    df_final = df_final[
+        [
+            "model",
+            "type",
+            "diff_adj_brier",
+            "sample_size",
+            "conf_int_lb",
+            "conf_int_ub",
+            "release_date",
+        ]
+    ]
+    df_final = df_final.sort_values(by=["model", "release_date"], ascending=True)
+
+    # Save CSV with suffix to avoid conflicts
+    suffix = f"_{output_suffix}" if output_suffix else ""
+    csv_path = f"{results_folder}/trendline_graph{suffix}.csv"
+    df_final.to_csv(csv_path, index=False)

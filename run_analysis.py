@@ -5,10 +5,10 @@ sys.path.append("src")
 
 import pandas as pd
 
-from generate_html_viewer import generate_html_viewer
 from stability_analysis import (
     compute_diff_adj_scores,
     create_leaderboard,
+    generate_trendline_graph,
     parse_forecast_data,
     parse_question_data,
     perform_sample_size_analysis,
@@ -154,6 +154,7 @@ def main():
             "stability_analysis": True,
             "stability_metrics": STABILITY_METRICS,
             "sample_size_analysis": True,
+            "generate_trendline_graph_data": True,
         },
         {
             "name": "leaderboard_baseline_all_data_for_2FE.csv",
@@ -162,6 +163,7 @@ def main():
             "min_days_active_dataset": 100,
             "stability_analysis": False,
             "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
         },
         {
             "name": "leaderboard_all_data_no_filtering.csv",
@@ -170,6 +172,7 @@ def main():
             "min_days_active_dataset": None,
             "stability_analysis": False,
             "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
         },
         {
             "name": "leaderboard_proposal.csv",
@@ -178,6 +181,7 @@ def main():
             "min_days_active_dataset": 50,
             "stability_analysis": False,
             "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
         },
         {
             "name": "leaderboard_proposal_baseline.csv",
@@ -189,6 +193,7 @@ def main():
             "min_days_active_dataset": 50,
             "stability_analysis": True,
             "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
         },
         {
             "name": "leaderboard_proposal_tournament.csv",
@@ -201,6 +206,7 @@ def main():
             "min_days_active_dataset": 50,
             "stability_analysis": True,
             "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
         },
     ]
 
@@ -216,9 +222,10 @@ def main():
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
             return_scored_data=config["stability_analysis"]
-            or config.get("sample_size_analysis", False),
+            or config.get("sample_size_analysis", False)
+            or config.get("generate_trendline_graph_data", False),
         )
-        if config["stability_analysis"]:
+        if config.get("stability_analysis", False):
             # Run stability analysis for each threshold value
             for threshold in STABILITY_THRESHOLDS:
                 perform_stability_analysis(
@@ -239,12 +246,16 @@ def main():
                 output_suffix=config["name"].replace(".csv", ""),
             )
 
-    print(" ✅")
+        if config.get("generate_trendline_graph_data", False):
+            # Generate data for the trendline graph
+            generate_trendline_graph(
+                df_with_scores=res_dict["df_with_scores"],
+                df_leaderboard=res_dict["df_leaderboard"],
+                results_folder=RESULTS_FOLDER,
+                output_suffix=config["name"].replace(".csv", ""),
+            )
 
-    print("Generating interactive HTML viewer...", end="", flush=True)
-    html_viewer_path = generate_html_viewer(f"{RESULTS_FOLDER}/leaderboard_viewer.html")
     print(" ✅")
-    print(f"HTML viewer saved to: {html_viewer_path}")
 
 
 if __name__ == "__main__":
