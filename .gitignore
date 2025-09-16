@@ -24,8 +24,8 @@ htmlcov/
 data/raw/*
 data/processed/*
 data/results/*
-# Keep for tracking purposes (should be unchanged)
-!data/results/leaderboard_baseline.csv 
+# Keep for tracking purposes
+!data/results/leaderboard_100d.csv 
 
 # Keep model release dates
 !data/raw/model_release_dates.csv

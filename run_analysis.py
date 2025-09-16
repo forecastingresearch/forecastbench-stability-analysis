@@ -48,7 +48,7 @@ def generate_leaderboard(
         return {"df_leaderboard": df_leaderboard}
 
 
-# EXPECTED RUNTIME: 1-2 minutes on a standard laptop
+# EXPECTED RUNTIME: ~5 minutes on a standard laptop
 
 # =====================================================
 # GLOBAL CONFIGURATION
@@ -143,7 +143,7 @@ def main():
     # Define leaderboard configurations
     leaderboard_config = [
         {
-            "name": "leaderboard_baseline.csv",
+            "name": "leaderboard_100d.csv",
             "mask": (df["forecast_due_date"] < "2025-06-01")
             & (
                 (df["model_first_forecast_date"] < "2025-06-01")
@@ -157,7 +157,7 @@ def main():
             "generate_trendline_graph_data": True,
         },
         {
-            "name": "leaderboard_baseline_all_data_for_2FE.csv",
+            "name": "leaderboard_100d_all_data_for_2FE.csv",
             "mask": None,
             "min_days_active_market": 100,
             "min_days_active_dataset": 100,
@@ -166,7 +166,7 @@ def main():
             "generate_trendline_graph_data": True,
         },
         {
-            "name": "leaderboard_all_data_no_filtering.csv",
+            "name": "leaderboard_0d.csv",
             "mask": None,
             "min_days_active_market": None,
             "min_days_active_dataset": None,
@@ -175,7 +175,7 @@ def main():
             "generate_trendline_graph_data": True,
         },
         {
-            "name": "leaderboard_proposal.csv",
+            "name": "leaderboard_50d_combined.csv",
             "mask": None,
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
@@ -184,7 +184,7 @@ def main():
             "generate_trendline_graph_data": True,
         },
         {
-            "name": "leaderboard_proposal_baseline.csv",
+            "name": "leaderboard_50d_baseline.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" not in x)
                 & df["model"].apply(lambda x: "news" not in x)
@@ -196,7 +196,7 @@ def main():
             "generate_trendline_graph_data": True,
         },
         {
-            "name": "leaderboard_proposal_tournament.csv",
+            "name": "leaderboard_50d_tournament.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" in x)
                 | df["model"].apply(lambda x: "news" in x)
@@ -235,7 +235,10 @@ def main():
                     metrics=STABILITY_METRICS,
                     viz_config=STABILITY_VIZ_CONFIG,
                     metric_labels=METRIC_LABELS,
-                    output_suffix=f"{config['name'].replace('.csv', '')}_threshold_{threshold}",
+                    output_suffix=(
+                        f"{config['name'].replace('.csv', '')}"
+                        f"_threshold_{threshold}"
+                    ),
                 )
 
         if config.get("sample_size_analysis", False):

@@ -2,7 +2,7 @@ import json
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -74,8 +74,8 @@ class StabilityMetrics:
         # If k > n_models, use 25% of models
         if k > n_models:
             raise ValueError(
-                f"Number of top-k model ({k}) exceeds the number\
-                      of models in the sample ({n_models})"
+                f"Number of top-k model ({k}) exceeds the number "
+                f"of models in the sample ({n_models})"
             )
 
         # Get top-k models by score (nsmallest because lower scores are better)
@@ -215,7 +215,8 @@ def process_parsed_data(
         df_questions: DataFrame with parsed question data
         df_model_release_dates: DataFrame with model release dates
         imputation_threshold: Maximum allowed fraction of imputed forecasts per model
-        reference_date: Reference date for calculating model activity (default: max resolution date)
+        reference_date: Reference date for calculating model activity (default: max
+            resolution date)
 
     Returns:
         Processed DataFrame with additional calculated columns including Brier scores,
@@ -263,10 +264,14 @@ def process_parsed_data(
 
     # Merge question data
     df_questions = df_questions[
-        ["id", "forecast_due_date", "url", "freeze_datetime_value"]
+        ["id", "source", "forecast_due_date", "url", "freeze_datetime_value"]
     ].copy()
-    df_questions.drop_duplicates(  # Deduplicate question data
-        subset=["id", "forecast_due_date"], inplace=True
+
+    # Deduplicate question data. Selecting
+    # "source" to avoid the edge case that two
+    # different sources use the same id
+    df_questions.drop_duplicates(
+        subset=["id", "source", "forecast_due_date"], inplace=True
     )
 
     # Ensure consistent types for merging
@@ -278,7 +283,7 @@ def process_parsed_data(
     )
 
     df_forecasts = pd.merge(
-        df_forecasts, df_questions, on=["id", "forecast_due_date"], how="left"
+        df_forecasts, df_questions, on=["id", "source", "forecast_due_date"], how="left"
     )
     df_forecasts = df_forecasts.rename(
         columns={"freeze_datetime_value": "market_value_on_freeze_date"}
@@ -291,7 +296,9 @@ def process_parsed_data(
         df_forecasts["resolution_date"] - df_forecasts["forecast_due_date"]
     ).dt.days
     df_forecasts["question_id"] = (
-        df_forecasts["id"].astype(str)
+        df_forecasts["source"].astype(str)
+        + "_"
+        + df_forecasts["id"].astype(str)
         + "_"
         + df_forecasts["forecast_due_date"].astype(str)
         + "_"
@@ -299,7 +306,8 @@ def process_parsed_data(
     )
     if df_forecasts[["question_id", "model"]].duplicated().sum() > 0:
         raise ValueError(
-            "There are duplicated model forecasts for the same question and due date."
+            "There are duplicated model forecasts for the same source, "
+            "question, and due date."
         )
 
     # Calculate Brier score
@@ -428,7 +436,8 @@ def get_diff_adj_brier(
     Calculate difficulty-adjusted Brier scores using two-way fixed effects estimation.
 
     Args:
-        df: DataFrame with forecast data including brier_score, question_id, and model columns
+        df: DataFrame with forecast data including brier_score, question_id, and model
+            columns
         max_model_days_released: Maximum days since model release for inclusion
         drop_baseline_models: List of baseline model names to exclude from estimation
 
@@ -436,7 +445,8 @@ def get_diff_adj_brier(
         DataFrame with added question_fe and diff_adj_brier_score columns
 
     Raises:
-        ValueError: If estimated question fixed effects don't match expected number of questions
+        ValueError: If estimated question fixed effects don't match expected number of
+            questions
     """
     df = df.copy()
     df_fe_model = df.copy()
@@ -459,9 +469,9 @@ def get_diff_adj_brier(
 
     if len(dict_question_fe) != len(df["question_id"].unique()):
         raise ValueError(
-            f"Estimated num. of question fixed effects \
-                  ({len(dict_question_fe)}) not equal to num. "
-            f"of questions ({len(df['question_id'].unique())})"
+            f"Estimated num. of question fixed effects"
+            f" ({len(dict_question_fe)}) not equal to num."
+            f" of questions ({len(df['question_id'].unique())})"
         )
 
     df["question_fe"] = df["question_id"].map(dict_question_fe)
@@ -478,11 +488,13 @@ def compute_diff_adj_scores(
 
     Args:
         df: DataFrame with forecast data including market_question indicator
-        max_model_days_released: Maximum days since model release for inclusion in estimation
+        max_model_days_released: Maximum days since model release for inclusion
+            in estimation
         drop_baseline_models: List of baseline model names to exclude from estimation
 
     Returns:
-        DataFrame with difficulty-adjusted Brier scores for both market and dataset questions
+        DataFrame with difficulty-adjusted Brier scores for both market and
+            dataset questions
     """
     df = df.copy()
 
@@ -515,7 +527,8 @@ def create_leaderboard(
     min_days_active_dataset: int = None,
 ) -> pd.DataFrame:
     """
-    Create aggregated leaderboard from difficulty-adjusted scores with optional activity filters.
+    Create aggregated leaderboard from difficulty-adjusted scores with optional
+    activity filters.
 
     Aggregates model performance across market and dataset questions, applying minimum
     activity thresholds if specified. Models below activity thresholds will show NaN
@@ -523,11 +536,14 @@ def create_leaderboard(
 
     Args:
         df_with_scores: DataFrame with computed difficulty-adjusted scores
-        min_days_active_market: Minimum days active required to include market scores (optional)
-        min_days_active_dataset: Minimum days active required to include dataset scores (optional)
+        min_days_active_market: Minimum days active required to include market
+            scores (optional)
+        min_days_active_dataset: Minimum days active required to include dataset
+            scores (optional)
 
     Returns:
-        DataFrame with aggregated scores, forecast counts, confidence intervals, and activity metrics
+        DataFrame with aggregated scores, forecast counts, confidence intervals, and
+            activity metrics
     """
     df = df_with_scores.copy()
 
