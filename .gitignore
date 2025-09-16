@@ -27,6 +27,9 @@ data/results/*
 # Keep for tracking purposes (should be unchanged)
 !data/results/leaderboard_baseline.csv 
 
+# Keep model release dates
+!data/raw/model_release_dates.csv
+
 # Keep the directory structure
 !data/raw/.gitkeep
 !data/processed/.gitkeep
