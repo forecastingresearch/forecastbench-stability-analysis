@@ -440,6 +440,7 @@ def get_diff_adj_brier(
     max_model_days_released: int,
     drop_baseline_models: list,
     mkt_adj_weight: float = 1.0,
+    exclude_tournament_models: bool = False,
 ) -> pd.DataFrame:
     """
     Calculate difficulty-adjusted Brier scores using two-way fixed effects estimation.
@@ -453,6 +454,8 @@ def get_diff_adj_brier(
             Brier score when calculating question difficulties. Question difficulties
             (i.e., question fixed effects) are calculated as
             mkt_adj_weight * market_brier + (1 - mkt_adj_weight) * 2FE_estimate
+        exclude_tournament_models: If true, exclude tournament models from the
+            estimation of question FE
 
     Returns:
         DataFrame with added question_fe and diff_adj_brier_score columns
@@ -480,6 +483,13 @@ def get_diff_adj_brier(
     # Remove benchmark models
     mask = ~df_fe_model["model"].isin(drop_baseline_models)
     df_fe_model = df_fe_model[mask].copy()
+
+    # Remove tournament models, if selected
+    if exclude_tournament_models:
+        mask = df_fe_model["model"].apply(lambda x: "freeze" not in x) & df_fe_model[
+            "model"
+        ].apply(lambda x: "news" not in x)
+        df_fe_model = df_fe_model[mask].copy()
 
     # Estimate the 2FE model
     mod = pf.feols("brier_score ~ 1 | question_id + model", data=df_fe_model)
@@ -518,6 +528,7 @@ def compute_diff_adj_scores(
     max_model_days_released: int,
     drop_baseline_models: list,
     mkt_adj_weight: float = 1.0,
+    exclude_tournament_models: bool = False,
 ) -> pd.DataFrame:
     """
     Compute difficulty-adjusted Brier scores for all questions, processing
@@ -528,6 +539,12 @@ def compute_diff_adj_scores(
         max_model_days_released: Maximum days since model release for inclusion
             in estimation
         drop_baseline_models: List of baseline model names to exclude from estimation
+        mkt_adj_weight: If only market questions are present, weight given for market
+            Brier score when calculating question difficulties. Question difficulties
+            (i.e., question fixed effects) are calculated as
+            mkt_adj_weight * market_brier + (1 - mkt_adj_weight) * 2FE_estimate
+        exclude_tournament_models: If true, exclude tournament models from the
+            estimation of question FE
 
     Returns:
         DataFrame with difficulty-adjusted Brier scores for both market and
@@ -544,6 +561,7 @@ def compute_diff_adj_scores(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
+        exclude_tournament_models=exclude_tournament_models,
     )
 
     # Dataset questions
@@ -552,6 +570,7 @@ def compute_diff_adj_scores(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
+        exclude_tournament_models=exclude_tournament_models,
     )
 
     # Combine back

@@ -26,6 +26,7 @@ def generate_leaderboard(
     max_model_days_released,
     mkt_adj_weight,
     drop_baseline_models,
+    exclude_tournament_models,
     results_folder,
     min_days_active_market=None,
     min_days_active_dataset=None,
@@ -39,6 +40,7 @@ def generate_leaderboard(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
+        exclude_tournament_models=exclude_tournament_models,
     )
     df_leaderboard = create_leaderboard(
         df_with_scores,
@@ -135,7 +137,8 @@ def cleanup_output_directories():
 
         # Recreate the directory
         os.makedirs(directory, exist_ok=True)
-        print(f"Created directory: {directory}")
+        print(f"Created directory: {directory}", end="", flush=True)
+        print(" ✅")
 
 
 def main():
@@ -227,16 +230,13 @@ def main():
         },
         {
             "name": "leaderboard_50d_tournament.csv",
-            "mask": (
-                df["model"].apply(lambda x: "freeze" in x)
-                | df["model"].apply(lambda x: "news" in x)
-                | (df["organization"] == "ForecastBench")
-            ),
+            "mask": None,
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
+            "exclude_tournament_models": True,
         },
     ]
 
@@ -249,6 +249,7 @@ def main():
             max_model_days_released=MAX_MODEL_DAYS_RELEASED,
             mkt_adj_weight=MKT_ADJ_WEIGHT,
             drop_baseline_models=DROP_BASELINE_MODELS,
+            exclude_tournament_models=config.get("exclude_tournament_models", False),
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
