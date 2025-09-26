@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import os
+import shutil
 import sys
 
 sys.path.append("src")
@@ -22,7 +24,9 @@ def generate_leaderboard(
     mask,
     output_filename,
     max_model_days_released,
+    mkt_adj_weight,
     drop_baseline_models,
+    exclude_tournament_models,
     results_folder,
     min_days_active_market=None,
     min_days_active_dataset=None,
@@ -35,6 +39,8 @@ def generate_leaderboard(
         df=df_filtered,
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
+        mkt_adj_weight=mkt_adj_weight,
+        exclude_tournament_models=exclude_tournament_models,
     )
     df_leaderboard = create_leaderboard(
         df_with_scores,
@@ -63,6 +69,9 @@ IMPUTATION_THRESHOLD = 0.05
 # Max number of days since model release to be included
 # in the 2FE model estimation
 MAX_MODEL_DAYS_RELEASED = 365
+
+# Market-adjustment weight
+MKT_ADJ_WEIGHT = 1.0
 
 # Models excluded from 2FE estimation
 DROP_BASELINE_MODELS = [
@@ -107,12 +116,36 @@ PROCESSED_FOLDER = "./data/processed"
 RESULTS_FOLDER = "./data/results"
 GRAPH_FOLDER = "./data/results/graphs"
 
+# If True, any existing output from previous runs
+# is deleted
+CLEANUP_OUTPUT = True
+
 # =====================================================
 # MAIN SCRIPT
 # =====================================================
 
 
+def cleanup_output_directories():
+    """Clean up existing output directories to ensure fresh results"""
+    directories_to_clean = [PROCESSED_FOLDER, RESULTS_FOLDER]
+
+    for directory in directories_to_clean:
+        if os.path.exists(directory):
+            print(f"Cleaning directory: {directory}...", end="", flush=True)
+            shutil.rmtree(directory)
+            print(" ✅")
+
+        # Recreate the directory
+        os.makedirs(directory, exist_ok=True)
+        print(f"Created directory: {directory}", end="", flush=True)
+        print(" ✅")
+
+
 def main():
+    # Clean up previous outputs before starting
+    if CLEANUP_OUTPUT:
+        cleanup_output_directories()
+
     print("Parsing forecast JSON files...", end="", flush=True)
     df = parse_forecast_data(f"{RAW_FOLDER}/forecast_sets/")
     df.to_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv", index=False)
@@ -197,16 +230,13 @@ def main():
         },
         {
             "name": "leaderboard_50d_tournament.csv",
-            "mask": (
-                df["model"].apply(lambda x: "freeze" in x)
-                | df["model"].apply(lambda x: "news" in x)
-                | (df["organization"] == "ForecastBench")
-            ),
+            "mask": None,
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
+            "exclude_tournament_models": True,
         },
     ]
 
@@ -217,7 +247,9 @@ def main():
             mask=config["mask"],
             output_filename=config["name"],
             max_model_days_released=MAX_MODEL_DAYS_RELEASED,
+            mkt_adj_weight=MKT_ADJ_WEIGHT,
             drop_baseline_models=DROP_BASELINE_MODELS,
+            exclude_tournament_models=config.get("exclude_tournament_models", False),
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
