@@ -315,6 +315,11 @@ def process_parsed_data(
         df_forecasts["forecast"] - df_forecasts["resolved_to"]
     ) ** 2
 
+    # Calculate market Brier score
+    df_forecasts["market_brier_score"] = (
+        df_forecasts["market_value_on_due_date"] - df_forecasts["resolved_to"]
+    ) ** 2
+
     # Add model release dates
 
     # Since models have various variants (e.g. "GPT-4o (zero shot)"
@@ -420,6 +425,7 @@ def process_parsed_data(
             "brier_score",
             "market_value_on_freeze_date",
             "market_value_on_due_date",
+            "market_brier_score",
         ]
     ].copy()
     shape_after_extra_fields = df_forecasts.shape
@@ -430,7 +436,10 @@ def process_parsed_data(
 
 
 def get_diff_adj_brier(
-    df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
+    df: pd.DataFrame,
+    max_model_days_released: int,
+    drop_baseline_models: list,
+    mkt_adj_weight: float = 1.0,
 ) -> pd.DataFrame:
     """
     Calculate difficulty-adjusted Brier scores using two-way fixed effects estimation.
@@ -440,6 +449,10 @@ def get_diff_adj_brier(
             columns
         max_model_days_released: Maximum days since model release for inclusion
         drop_baseline_models: List of baseline model names to exclude from estimation
+        mkt_adj_weight: If only market questions are present, weight given for market
+            Brier score when calculating question difficulties. Question difficulties
+            (i.e., question fixed effects) are calculated as
+            mkt_adj_weight * market_brier + (1 - mkt_adj_weight) * 2FE_estimate
 
     Returns:
         DataFrame with added question_fe and diff_adj_brier_score columns
@@ -450,6 +463,11 @@ def get_diff_adj_brier(
     """
     df = df.copy()
     df_fe_model = df.copy()
+
+    if mkt_adj_weight < 0.0 or mkt_adj_weight > 1.0:
+        raise ValueError(
+            f"Market weight should be in [0, 1] but instead equals {mkt_adj_weight}"
+        )
 
     # Data filtering for 2FE estimation
 
@@ -475,12 +493,31 @@ def get_diff_adj_brier(
         )
 
     df["question_fe"] = df["question_id"].map(dict_question_fe)
+
+    # For market-questions only, perform the market Brier
+    # adjustment
+    if mkt_adj_weight > 0.0:
+        question_types = df["market_question"].unique()
+        is_market_only = (len(question_types) == 1) and question_types[0]
+        if is_market_only:
+            # Check for missing values
+            if df["market_brier_score"].isna().any():
+                raise ValueError("Some questions missing market Brier scores")
+
+            df["question_fe"] = (
+                mkt_adj_weight * df["market_brier_score"]
+                + (1 - mkt_adj_weight) * df["question_fe"]
+            )
+
     df["diff_adj_brier_score"] = df["brier_score"] - df["question_fe"]
     return df
 
 
 def compute_diff_adj_scores(
-    df: pd.DataFrame, max_model_days_released: int, drop_baseline_models: list
+    df: pd.DataFrame,
+    max_model_days_released: int,
+    drop_baseline_models: list,
+    mkt_adj_weight: float = 1.0,
 ) -> pd.DataFrame:
     """
     Compute difficulty-adjusted Brier scores for all questions, processing
@@ -506,6 +543,7 @@ def compute_diff_adj_scores(
         df=df[mask],
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
+        mkt_adj_weight=mkt_adj_weight,
     )
 
     # Dataset questions
@@ -513,6 +551,7 @@ def compute_diff_adj_scores(
         df=df[~mask],
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
+        mkt_adj_weight=mkt_adj_weight,
     )
 
     # Combine back

@@ -22,6 +22,7 @@ def generate_leaderboard(
     mask,
     output_filename,
     max_model_days_released,
+    mkt_adj_weight,
     drop_baseline_models,
     results_folder,
     min_days_active_market=None,
@@ -35,6 +36,7 @@ def generate_leaderboard(
         df=df_filtered,
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
+        mkt_adj_weight=mkt_adj_weight,
     )
     df_leaderboard = create_leaderboard(
         df_with_scores,
@@ -63,6 +65,9 @@ IMPUTATION_THRESHOLD = 0.05
 # Max number of days since model release to be included
 # in the 2FE model estimation
 MAX_MODEL_DAYS_RELEASED = 365
+
+# Market-adjustment weight
+MKT_ADJ_WEIGHT = 1.0
 
 # Models excluded from 2FE estimation
 DROP_BASELINE_MODELS = [
@@ -217,6 +222,7 @@ def main():
             mask=config["mask"],
             output_filename=config["name"],
             max_model_days_released=MAX_MODEL_DAYS_RELEASED,
+            mkt_adj_weight=MKT_ADJ_WEIGHT,
             drop_baseline_models=DROP_BASELINE_MODELS,
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
