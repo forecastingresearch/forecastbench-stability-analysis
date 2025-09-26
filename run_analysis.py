@@ -180,7 +180,7 @@ def main():
             "mask": (df["forecast_due_date"] < "2025-06-01")
             & (
                 (df["model_first_forecast_date"] < "2025-06-01")
-                | (df["organization"] == "ForecastBench")
+                | (df["model_organization"] == "ForecastBench")
             ),
             "min_days_active_market": None,
             "min_days_active_dataset": None,

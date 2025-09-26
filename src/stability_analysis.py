@@ -130,13 +130,13 @@ def parse_forecast_data(base_dir: str = ".") -> pd.DataFrame:
                     data = json.load(f)
 
                 # Extract model metadata
-                organization = data.get("organization", "")
+                model_organization = data.get("model_organization", "")
                 model = data.get("model", "")
 
                 # Process each forecast
                 for forecast in data.get("forecasts", []):
                     record = {
-                        "organization": organization,
+                        "model_organization": model_organization,
                         "model": model,
                         "id": forecast.get("id"),
                         "forecast_due_date": forecast.get("forecast_due_date"),
@@ -244,7 +244,7 @@ def process_parsed_data(
     df_temp.rename(columns={"imputed": "imputed_rate"}, inplace=True)
     df_forecasts = pd.merge(df_forecasts, df_temp, on="model", how="left")
     mask = (df_forecasts["imputed_rate"] <= imputation_threshold) | (
-        df_forecasts["organization"] == "ForecastBench"
+        df_forecasts["model_organization"] == "ForecastBench"
     )
     df_forecasts = df_forecasts.loc[mask,].copy()
     shape_after_filtering = df_forecasts.shape
@@ -385,7 +385,7 @@ def process_parsed_data(
     )
 
     # Check if all models have release dates
-    mask = df_forecasts["organization"] != "ForecastBench"
+    mask = df_forecasts["model_organization"] != "ForecastBench"
     if df_forecasts.loc[mask, "model_release_date"].isnull().any():
         missing_models = (
             df_forecasts.loc[
@@ -401,7 +401,7 @@ def process_parsed_data(
     # Select key columns & export
     df_forecasts = df_forecasts[
         [
-            "organization",
+            "model_organization",
             "model",
             "model_release_date",
             "model_first_forecast_date",
@@ -476,7 +476,7 @@ def get_diff_adj_brier(
 
     # Remove old models
     mask = (df_fe_model["model_days_released"] < max_model_days_released) | (
-        df_fe_model["organization"] == "ForecastBench"
+        df_fe_model["model_organization"] == "ForecastBench"
     )
     df_fe_model = df_fe_model[mask].copy()
 
@@ -612,7 +612,7 @@ def create_leaderboard(
                 "model",
                 "model_days_active_market",
                 "model_days_active_dataset",
-                "organization",
+                "model_organization",
             ]
         ]
         .copy()
@@ -636,7 +636,7 @@ def create_leaderboard(
         if min_days is not None:
             df_agg = pd.merge(
                 df_agg,
-                df_res[["model", f"model_days_active_{name}", "organization"]],
+                df_res[["model", f"model_days_active_{name}", "model_organization"]],
                 on="model",
                 how="left",
             )
@@ -644,7 +644,7 @@ def create_leaderboard(
             # Activity filter not specified for ForecastBench models
             # since they do not have a release date
             mask_active = (df_agg[f"model_days_active_{name}"] >= min_days) | (
-                df_agg["organization"] == "ForecastBench"
+                df_agg["model_organization"] == "ForecastBench"
             )
             df_agg.loc[~mask_active, "diff_adj_brier_score"] = np.nan
 
@@ -912,7 +912,7 @@ def perform_sample_size_analysis(
 
             # Get all questions for this model
             mask_model = (df_subset["model"] == model) & (
-                df_subset["organization"] != "ForecastBench"
+                df_subset["model_organization"] != "ForecastBench"
             )
             model_questions = df_subset[mask_model].copy()
 
