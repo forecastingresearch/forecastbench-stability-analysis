@@ -687,32 +687,8 @@ def _save_and_plot_results(
     csv_path = f"{results_folder}/stability_{name}{suffix}.csv"
     df_results.to_csv(csv_path, index=False)
 
-    # Individual plots
-    if viz_config.get("save_individual_plots", True):
-        for metric in metrics:
-            if metric in df_results.columns:
-                plt.figure(figsize=(8, 6))
-                plt.plot(df_results["x"], df_results[metric], linewidth=2)
-                plt.xlabel("Days (X in 0-X range)")
-                plt.ylabel(metric_labels.get(metric, metric.replace("_", " ").title()))
-                plt.title(
-                    f"{metric_labels.get(metric, metric)} - {name.title()} Questions"
-                )
-                plt.grid(True, alpha=0.3)
-
-                plot_path = f"{results_folder}/stability_{name}_{metric}{suffix}.png"
-                plt.savefig(plot_path, dpi=viz_config.get("dpi", 300))
-
-                if viz_config.get("show_plots", False):
-                    plt.show()
-                else:
-                    plt.close()
-
-    # Combined plot
-    if (
-        viz_config.get("save_combined_plot", True)
-        and len([m for m in metrics if m in df_results.columns]) > 1
-    ):
+    # Create graphs
+    if len([m for m in metrics if m in df_results.columns]) > 1:
         n_metrics = len([m for m in metrics if m in df_results.columns])
         n_cols = 2
         n_rows = (n_metrics + 1) // 2
@@ -743,8 +719,8 @@ def _save_and_plot_results(
             axes[i].set_visible(False)
 
         plt.tight_layout()
-        combined_path = f"{results_folder}/stability_{name}_combined{suffix}.png"
-        plt.savefig(combined_path, dpi=viz_config.get("dpi", 300))
+        plot_path = f"{results_folder}/stability_{name}{suffix}.png"
+        plt.savefig(plot_path, dpi=viz_config.get("dpi", 300))
 
         if viz_config.get("show_plots", False):
             plt.show()
