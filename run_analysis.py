@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import os
+import shutil
 import sys
 
 sys.path.append("src")
@@ -112,12 +114,35 @@ PROCESSED_FOLDER = "./data/processed"
 RESULTS_FOLDER = "./data/results"
 GRAPH_FOLDER = "./data/results/graphs"
 
+# If True, any existing output from previous runs
+# is deleted
+CLEANUP_OUTPUT = True
+
 # =====================================================
 # MAIN SCRIPT
 # =====================================================
 
 
+def cleanup_output_directories():
+    """Clean up existing output directories to ensure fresh results"""
+    directories_to_clean = [PROCESSED_FOLDER, RESULTS_FOLDER]
+
+    for directory in directories_to_clean:
+        if os.path.exists(directory):
+            print(f"Cleaning directory: {directory}...", end="", flush=True)
+            shutil.rmtree(directory)
+            print(" ✅")
+
+        # Recreate the directory
+        os.makedirs(directory, exist_ok=True)
+        print(f"Created directory: {directory}")
+
+
 def main():
+    # Clean up previous outputs before starting
+    if CLEANUP_OUTPUT:
+        cleanup_output_directories()
+
     print("Parsing forecast JSON files...", end="", flush=True)
     df = parse_forecast_data(f"{RAW_FOLDER}/forecast_sets/")
     df.to_csv(f"{PROCESSED_FOLDER}/parsed_forecasts.csv", index=False)
