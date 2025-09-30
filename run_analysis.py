@@ -61,7 +61,7 @@ def generate_leaderboard(
 # =====================================================
 
 # Date of "now" for calculating days active on ForecastBench
-REFERENCE_DATE = "2025-09-10"
+REFERENCE_DATE = "2025-09-29"
 
 # Maximum allowed fraction of imputed forecasts per model
 IMPUTATION_THRESHOLD = 0.05
