@@ -226,8 +226,34 @@ def process_parsed_data(
     # Filtering
     print("Before filtering:{}".format(df_forecasts.shape))
 
+    # Remove non-ForecastBench models with >imputation_threshold imputed
+    # questions. Filtering is done at the forecast_due_date level (i.e.,
+    # round-level)
+
+    # Calculate imputation rate per model per round
+    df_imputation_rate = (
+        df_forecasts.groupby(["forecast_due_date", "model"])["imputed"]
+        .mean()
+        .reset_index()
+        .rename(columns={"imputed": "round_imputed_rate"})
+    )
+
+    # Merge back and filter
+    df_forecasts = pd.merge(
+        df_forecasts, df_imputation_rate, how="left", on=["forecast_due_date", "model"]
+    )
+    mask = (df_forecasts["round_imputed_rate"] <= imputation_threshold) | (
+        df_forecasts["model_organization"] == "ForecastBench"
+    )
+    df_forecasts = df_forecasts[mask]
+
+    print(
+        f"After removing models with >{imputation_threshold*100}% "
+        f"imputed: {df_forecasts.shape}"
+    )
+
     # Remove all combination questions (non-missing "direction")
-    mask = df_forecasts["direction"].apply(lambda x: x == "[]")
+    mask = df_forecasts["direction"] == "[]"
     df_forecasts = df_forecasts.loc[mask,].copy()
     del df_forecasts["direction"]
     print("After removing combo questions:{}".format(df_forecasts.shape))
@@ -237,29 +263,12 @@ def process_parsed_data(
     df_forecasts = df_forecasts.loc[mask,].copy()
     print("After removing unresolved questions:{}".format(df_forecasts.shape))
 
-    # Remove non-ForecastBench models with too many imputed questions
-    df_temp = df_forecasts.groupby("model")["imputed"].mean().reset_index()
-    if df_temp["model"].duplicated().sum() > 0:
-        raise ValueError("There are duplicated models in the data.")
-    df_temp.rename(columns={"imputed": "imputed_rate"}, inplace=True)
-    df_forecasts = pd.merge(df_forecasts, df_temp, on="model", how="left")
-    mask = (df_forecasts["imputed_rate"] <= imputation_threshold) | (
-        df_forecasts["model_organization"] == "ForecastBench"
-    )
-    df_forecasts = df_forecasts.loc[mask,].copy()
     shape_after_filtering = df_forecasts.shape
-    print(
-        "After removing models with >5% imputed questions:{}".format(
-            shape_after_filtering
-        )
-    )
 
     # Calculation of additional columns
 
     # Add a column indicating if the question is from a "market" source
-    mask = df_forecasts["source"].apply(
-        lambda x: x in ["infer", "manifold", "metaculus", "polymarket"]
-    )
+    mask = df_forecasts["source"].isin(["infer", "manifold", "metaculus", "polymarket"])
     df_forecasts["market_question"] = mask
 
     # Merge question data
@@ -411,7 +420,7 @@ def process_parsed_data(
             "model_days_active",
             "model_days_active_market",
             "model_days_active_dataset",
-            "imputed_rate",
+            "round_imputed_rate",
             "imputed",
             "question_id",
             "market_question",
