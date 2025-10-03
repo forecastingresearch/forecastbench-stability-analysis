@@ -179,47 +179,6 @@ def main():
     # Define leaderboard configurations
     leaderboard_config = [
         {
-            "name": "leaderboard_100d.csv",
-            "mask": (df["forecast_due_date"] < "2025-06-01")
-            & (
-                (df["model_first_forecast_date"] < "2025-06-01")
-                | (df["model_organization"] == "ForecastBench")
-            ),
-            "min_days_active_market": None,
-            "min_days_active_dataset": None,
-            "stability_analysis": True,
-            "stability_metrics": STABILITY_METRICS,
-            "sample_size_analysis": True,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_100d_all_data_for_2FE.csv",
-            "mask": None,
-            "min_days_active_market": 100,
-            "min_days_active_dataset": 100,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_0d.csv",
-            "mask": None,
-            "min_days_active_market": None,
-            "min_days_active_dataset": None,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_50d_combined.csv",
-            "mask": None,
-            "min_days_active_market": 50,
-            "min_days_active_dataset": 50,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
             "name": "leaderboard_50d_baseline.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" not in x)
@@ -228,7 +187,7 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
-            "sample_size_analysis": False,
+            "sample_size_analysis": True,
             "generate_trendline_graph_data": True,
         },
         {
@@ -237,6 +196,28 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
+            "sample_size_analysis": True,
+            "generate_trendline_graph_data": True,
+            "exclude_tournament_models_in_2FE": True,
+        },
+        {
+            "name": "leaderboard_baseline_interim.csv",
+            "mask": (
+                df["model"].apply(lambda x: "freeze" not in x)
+                & df["model"].apply(lambda x: "news" not in x)
+            ),
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 7,
+            "stability_analysis": False,
+            "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
+        },
+        {
+            "name": "leaderboard_tournament_interim.csv",
+            "mask": None,
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 7,
+            "stability_analysis": False,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
             "exclude_tournament_models_in_2FE": True,
