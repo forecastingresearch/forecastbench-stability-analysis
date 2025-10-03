@@ -26,7 +26,7 @@ def generate_leaderboard(
     max_model_days_released,
     mkt_adj_weight,
     drop_baseline_models,
-    exclude_tournament_models,
+    exclude_tournament_models_in_2FE,
     results_folder,
     min_days_active_market=None,
     min_days_active_dataset=None,
@@ -40,7 +40,7 @@ def generate_leaderboard(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
-        exclude_tournament_models=exclude_tournament_models,
+        exclude_tournament_models_in_2FE=exclude_tournament_models_in_2FE,
     )
     df_leaderboard = create_leaderboard(
         df_with_scores,
@@ -83,6 +83,9 @@ DROP_BASELINE_MODELS = [
 ]
 
 # Number of days active for models for the stability analysis
+# If, e.g., this number is 180, that means that only models
+# that have participated in ForecastBench for at least 180 days
+# are included in the stability analysis
 STABILITY_THRESHOLDS = [100, 180]
 
 # Stability metrics to calculate
@@ -176,47 +179,6 @@ def main():
     # Define leaderboard configurations
     leaderboard_config = [
         {
-            "name": "leaderboard_100d.csv",
-            "mask": (df["forecast_due_date"] < "2025-06-01")
-            & (
-                (df["model_first_forecast_date"] < "2025-06-01")
-                | (df["model_organization"] == "ForecastBench")
-            ),
-            "min_days_active_market": None,
-            "min_days_active_dataset": None,
-            "stability_analysis": True,
-            "stability_metrics": STABILITY_METRICS,
-            "sample_size_analysis": True,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_100d_all_data_for_2FE.csv",
-            "mask": None,
-            "min_days_active_market": 100,
-            "min_days_active_dataset": 100,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_0d.csv",
-            "mask": None,
-            "min_days_active_market": None,
-            "min_days_active_dataset": None,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
-            "name": "leaderboard_50d_combined.csv",
-            "mask": None,
-            "min_days_active_market": 50,
-            "min_days_active_dataset": 50,
-            "stability_analysis": False,
-            "sample_size_analysis": False,
-            "generate_trendline_graph_data": True,
-        },
-        {
             "name": "leaderboard_50d_baseline.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" not in x)
@@ -225,7 +187,7 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
-            "sample_size_analysis": False,
+            "sample_size_analysis": True,
             "generate_trendline_graph_data": True,
         },
         {
@@ -234,9 +196,31 @@ def main():
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
+            "sample_size_analysis": True,
+            "generate_trendline_graph_data": True,
+            "exclude_tournament_models_in_2FE": True,
+        },
+        {
+            "name": "leaderboard_baseline_interim.csv",
+            "mask": (
+                df["model"].apply(lambda x: "freeze" not in x)
+                & df["model"].apply(lambda x: "news" not in x)
+            ),
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 7,
+            "stability_analysis": False,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
-            "exclude_tournament_models": True,
+        },
+        {
+            "name": "leaderboard_tournament_interim.csv",
+            "mask": None,
+            "min_days_active_market": 50,
+            "min_days_active_dataset": 7,
+            "stability_analysis": False,
+            "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
+            "exclude_tournament_models_in_2FE": True,
         },
     ]
 
@@ -249,7 +233,9 @@ def main():
             max_model_days_released=MAX_MODEL_DAYS_RELEASED,
             mkt_adj_weight=MKT_ADJ_WEIGHT,
             drop_baseline_models=DROP_BASELINE_MODELS,
-            exclude_tournament_models=config.get("exclude_tournament_models", False),
+            exclude_tournament_models_in_2FE=config.get(
+                "exclude_tournament_models_in_2FE", False
+            ),
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],
