@@ -26,7 +26,7 @@ def generate_leaderboard(
     max_model_days_released,
     mkt_adj_weight,
     drop_baseline_models,
-    exclude_tournament_models,
+    exclude_tournament_models_in_2FE,
     results_folder,
     min_days_active_market=None,
     min_days_active_dataset=None,
@@ -40,7 +40,7 @@ def generate_leaderboard(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
-        exclude_tournament_models=exclude_tournament_models,
+        exclude_tournament_models_in_2FE=exclude_tournament_models_in_2FE,
     )
     df_leaderboard = create_leaderboard(
         df_with_scores,
@@ -236,7 +236,7 @@ def main():
             "stability_analysis": True,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
-            "exclude_tournament_models": True,
+            "exclude_tournament_models_in_2FE": True,
         },
     ]
 
@@ -249,7 +249,9 @@ def main():
             max_model_days_released=MAX_MODEL_DAYS_RELEASED,
             mkt_adj_weight=MKT_ADJ_WEIGHT,
             drop_baseline_models=DROP_BASELINE_MODELS,
-            exclude_tournament_models=config.get("exclude_tournament_models", False),
+            exclude_tournament_models_in_2FE=config.get(
+                "exclude_tournament_models_in_2FE", False
+            ),
             results_folder=RESULTS_FOLDER,
             min_days_active_market=config["min_days_active_market"],
             min_days_active_dataset=config["min_days_active_dataset"],

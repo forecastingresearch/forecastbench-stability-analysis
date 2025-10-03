@@ -449,7 +449,7 @@ def get_diff_adj_brier(
     max_model_days_released: int,
     drop_baseline_models: list,
     mkt_adj_weight: float = 1.0,
-    exclude_tournament_models: bool = False,
+    exclude_tournament_models_in_2FE: bool = False,
 ) -> pd.DataFrame:
     """
     Calculate difficulty-adjusted Brier scores using two-way fixed effects estimation.
@@ -463,7 +463,7 @@ def get_diff_adj_brier(
             Brier score when calculating question difficulties. Question difficulties
             (i.e., question fixed effects) are calculated as
             mkt_adj_weight * market_brier + (1 - mkt_adj_weight) * 2FE_estimate
-        exclude_tournament_models: If true, exclude tournament models from the
+        exclude_tournament_models_in_2FE: If true, exclude tournament models from the
             estimation of question FE
 
     Returns:
@@ -494,7 +494,7 @@ def get_diff_adj_brier(
     df_fe_model = df_fe_model[mask].copy()
 
     # Remove tournament models, if selected
-    if exclude_tournament_models:
+    if exclude_tournament_models_in_2FE:
         mask = df_fe_model["model"].apply(lambda x: "freeze" not in x) & df_fe_model[
             "model"
         ].apply(lambda x: "news" not in x)
@@ -537,7 +537,7 @@ def compute_diff_adj_scores(
     max_model_days_released: int,
     drop_baseline_models: list,
     mkt_adj_weight: float = 1.0,
-    exclude_tournament_models: bool = False,
+    exclude_tournament_models_in_2FE: bool = False,
 ) -> pd.DataFrame:
     """
     Compute difficulty-adjusted Brier scores for all questions, processing
@@ -552,7 +552,7 @@ def compute_diff_adj_scores(
             Brier score when calculating question difficulties. Question difficulties
             (i.e., question fixed effects) are calculated as
             mkt_adj_weight * market_brier + (1 - mkt_adj_weight) * 2FE_estimate
-        exclude_tournament_models: If true, exclude tournament models from the
+        exclude_tournament_models_in_2FE: If true, exclude tournament models from the
             estimation of question FE
 
     Returns:
@@ -570,7 +570,7 @@ def compute_diff_adj_scores(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
-        exclude_tournament_models=exclude_tournament_models,
+        exclude_tournament_models_in_2FE=exclude_tournament_models_in_2FE,
     )
 
     # Dataset questions
@@ -579,7 +579,7 @@ def compute_diff_adj_scores(
         max_model_days_released=max_model_days_released,
         drop_baseline_models=drop_baseline_models,
         mkt_adj_weight=mkt_adj_weight,
-        exclude_tournament_models=exclude_tournament_models,
+        exclude_tournament_models_in_2FE=exclude_tournament_models_in_2FE,
     )
 
     # Combine back
