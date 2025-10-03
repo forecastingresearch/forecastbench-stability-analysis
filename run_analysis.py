@@ -83,6 +83,9 @@ DROP_BASELINE_MODELS = [
 ]
 
 # Number of days active for models for the stability analysis
+# If, e.g., this number is 180, that means that only models
+# that have participated in ForecastBench for at least 180 days
+# are included in the stability analysis
 STABILITY_THRESHOLDS = [100, 180]
 
 # Stability metrics to calculate
