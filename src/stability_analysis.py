@@ -206,6 +206,7 @@ def process_parsed_data(
     df_model_release_dates: pd.DataFrame,
     imputation_threshold: float,
     reference_date: Optional[str] = None,
+    output_folder: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Process parsed forecast and question data.
@@ -217,6 +218,7 @@ def process_parsed_data(
         imputation_threshold: Maximum allowed fraction of imputed forecasts per model
         reference_date: Reference date for calculating model activity (default: max
             resolution date)
+        output_folder: Optional folder path to save filtered models CSV
 
     Returns:
         Processed DataFrame with additional calculated columns including Brier scores,
@@ -262,6 +264,17 @@ def process_parsed_data(
         (df_forecasts["round_imputed_rate_market"] <= imputation_threshold)
         & (df_forecasts["round_imputed_rate_dataset"] <= imputation_threshold)
     ) | (df_forecasts["model_organization"] == "ForecastBench")
+
+    # Save filtered models information to CSV
+    filtered_mask = ~mask
+    if filtered_mask.any() and output_folder is not None:
+        filtered_data = df_forecasts[filtered_mask][
+            ["model", "forecast_due_date", "round_imputed_rate_dataset", "round_imputed_rate_market"]
+        ].drop_duplicates().sort_values(by=["model", "forecast_due_date"])
+
+        csv_path = f"{output_folder}/filtered_models_imputation.csv"
+        filtered_data.to_csv(csv_path, index=False)
+
     df_forecasts = df_forecasts[mask]
 
     print(

@@ -167,6 +167,7 @@ def main():
         df_model_release_dates=df_model_release_dates,
         imputation_threshold=IMPUTATION_THRESHOLD,
         reference_date=REFERENCE_DATE,
+        output_folder=PROCESSED_FOLDER,
     )
     df.to_csv(f"{PROCESSED_FOLDER}/processed_data.csv", index=False)
     df[["model", "model_release_date"]].drop_duplicates().sort_values(
