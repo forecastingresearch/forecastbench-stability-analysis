@@ -258,9 +258,10 @@ def process_parsed_data(
 
     # Apply filtering. Remove a model if the imputation
     # threshold is exceeded for either market or dataset questions
-    mask = (df_forecasts["round_imputed_rate_market"] <= imputation_threshold) & (
-        df_forecasts["round_imputed_rate_dataset"] <= imputation_threshold
-    )
+    mask = (
+        (df_forecasts["round_imputed_rate_market"] <= imputation_threshold)
+        & (df_forecasts["round_imputed_rate_dataset"] <= imputation_threshold)
+    ) | (df_forecasts["model_organization"] == "ForecastBench")
     df_forecasts = df_forecasts[mask]
 
     print(
