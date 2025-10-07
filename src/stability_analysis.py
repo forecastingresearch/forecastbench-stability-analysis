@@ -226,24 +226,40 @@ def process_parsed_data(
     # Filtering
     print("Before filtering:{}".format(df_forecasts.shape))
 
+    # Add a column indicating if the question is from a "market" source
+    mask = df_forecasts["source"].isin(["infer", "manifold", "metaculus", "polymarket"])
+    df_forecasts["market_question"] = mask
+
     # Remove non-ForecastBench models with >imputation_threshold imputed
     # questions. Filtering is done at the forecast_due_date level (i.e.,
-    # round-level)
+    # round-level), and separately for dataset & market questions
 
-    # Calculate imputation rate per model per round
-    df_imputation_rate = (
-        df_forecasts.groupby(["forecast_due_date", "model"])["imputed"]
-        .mean()
-        .reset_index()
-        .rename(columns={"imputed": "round_imputed_rate"})
-    )
+    for name, mask_val in [
+        ("market", True),
+        ("dataset", False),
+    ]:
+        # Calculate imputation rate per model per round
+        mask = df_forecasts["market_question"] == mask_val
+        df_imputation_rate = (
+            df_forecasts[mask]
+            .groupby(["forecast_due_date", "model"])["imputed"]
+            .mean()
+            .reset_index()
+            .rename(columns={"imputed": f"round_imputed_rate_{name}"})
+        )
 
-    # Merge back and filter
-    df_forecasts = pd.merge(
-        df_forecasts, df_imputation_rate, how="left", on=["forecast_due_date", "model"]
-    )
-    mask = (df_forecasts["round_imputed_rate"] <= imputation_threshold) | (
-        df_forecasts["model_organization"] == "ForecastBench"
+        # Merge back and filter
+        df_forecasts = pd.merge(
+            df_forecasts,
+            df_imputation_rate,
+            how="left",
+            on=["forecast_due_date", "model"],
+        )
+
+    # Apply filtering. Remove a model if the imputation
+    # threshold is exceeded for either market or dataset questions
+    mask = (df_forecasts["round_imputed_rate_market"] <= imputation_threshold) & (
+        df_forecasts["round_imputed_rate_dataset"] <= imputation_threshold
     )
     df_forecasts = df_forecasts[mask]
 
@@ -266,10 +282,6 @@ def process_parsed_data(
     shape_after_filtering = df_forecasts.shape
 
     # Calculation of additional columns
-
-    # Add a column indicating if the question is from a "market" source
-    mask = df_forecasts["source"].isin(["infer", "manifold", "metaculus", "polymarket"])
-    df_forecasts["market_question"] = mask
 
     # Merge question data
     df_questions = df_questions[
@@ -420,7 +432,8 @@ def process_parsed_data(
             "model_days_active",
             "model_days_active_market",
             "model_days_active_dataset",
-            "round_imputed_rate",
+            "round_imputed_rate_dataset",
+            "round_imputed_rate_market",
             "imputed",
             "question_id",
             "market_question",
