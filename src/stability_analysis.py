@@ -225,8 +225,98 @@ def process_parsed_data(
         model activity metrics, and consolidated forecast information
     """
 
+    def calculate_imputation_rate(
+        df: pd.DataFrame,
+        group_by: list[str],
+        column_name: str,
+    ) -> pd.DataFrame:
+        """
+        Calculate imputation rate grouped by specified columns.
+
+        Args:
+            df: DataFrame to calculate imputation rate for
+            group_by: List of columns to group by
+            column_name: Name for the resulting imputation rate column
+
+        Returns:
+            DataFrame with group_by columns and imputation rate
+        """
+        return (
+            df.groupby(group_by)["imputed"]
+            .mean()
+            .reset_index()
+            .rename(columns={"imputed": column_name})
+        )
+
+    def save_filtered_models(
+        df: pd.DataFrame,
+        filtered_mask: pd.Series,
+        columns: list[str],
+        sort_by: list[str],
+        filename: str,
+    ) -> None:
+        """
+        Save information about filtered models to CSV.
+
+        Args:
+            df: DataFrame containing all data
+            filtered_mask: Boolean mask indicating filtered rows
+            columns: Columns to include in output
+            sort_by: Columns to sort by
+            filename: Output filename (without path)
+        """
+        if filtered_mask.any() and output_folder is not None:
+            filtered_data = (
+                df[filtered_mask][columns].drop_duplicates().sort_values(by=sort_by)
+            )
+            csv_path = f"{output_folder}/{filename}"
+            filtered_data.to_csv(csv_path, index=False)
+
     # Filtering
     print("Before filtering:{}".format(df_forecasts.shape))
+
+    # Step 1: Remove non-ForecastBench models with >imputation_threshold imputed
+    # questions per round (across all question types)
+    df_overall_imputation = calculate_imputation_rate(
+        df_forecasts,
+        group_by=["model", "forecast_due_date"],
+        column_name="round_imputed_rate_overall",
+    )
+    df_forecasts = pd.merge(
+        df_forecasts,
+        df_overall_imputation,
+        how="left",
+        on=["model", "forecast_due_date"],
+    )
+
+    mask = (df_forecasts["round_imputed_rate_overall"] <= imputation_threshold) | (
+        df_forecasts["model_organization"] == "ForecastBench"
+    )
+
+    # Save filtered models information to CSV (overall)
+    save_filtered_models(
+        df=df_forecasts,
+        filtered_mask=~mask,
+        columns=["model", "forecast_due_date", "round_imputed_rate_overall"],
+        sort_by=["model", "forecast_due_date"],
+        filename="filtered_models_imputation_overall.csv",
+    )
+
+    df_forecasts = df_forecasts[mask]
+
+    print(
+        f"After removing models with >{imputation_threshold*100}% "
+        f"imputed overall: {df_forecasts.shape}"
+    )
+
+    # Step 2: Remove all combination questions (non-missing "direction")
+    mask = df_forecasts["direction"] == "[]"
+    df_forecasts = df_forecasts.loc[mask,].copy()
+    del df_forecasts["direction"]
+    print("After removing combo questions:{}".format(df_forecasts.shape))
+
+    # Step 3: Remove non-ForecastBench models with >imputation_threshold imputed
+    # questions, separately for dataset & market questions
 
     # Add a column indicating if the question is from a "market" source
     mask = df_forecasts["source"].isin(["infer", "manifold", "metaculus", "polymarket"])
@@ -242,12 +332,10 @@ def process_parsed_data(
     ]:
         # Calculate imputation rate per model per round
         mask = df_forecasts["market_question"] == mask_val
-        df_imputation_rate = (
-            df_forecasts[mask]
-            .groupby(["forecast_due_date", "model"])["imputed"]
-            .mean()
-            .reset_index()
-            .rename(columns={"imputed": f"round_imputed_rate_{name}"})
+        df_imputation_rate = calculate_imputation_rate(
+            df_forecasts[mask],
+            group_by=["forecast_due_date", "model"],
+            column_name=f"round_imputed_rate_{name}",
         )
 
         # Merge back and filter
@@ -266,29 +354,27 @@ def process_parsed_data(
     ) | (df_forecasts["model_organization"] == "ForecastBench")
 
     # Save filtered models information to CSV
-    filtered_mask = ~mask
-    if filtered_mask.any() and output_folder is not None:
-        filtered_data = df_forecasts[filtered_mask][
-            ["model", "forecast_due_date", "round_imputed_rate_dataset", "round_imputed_rate_market"]
-        ].drop_duplicates().sort_values(by=["model", "forecast_due_date"])
-
-        csv_path = f"{output_folder}/filtered_models_imputation.csv"
-        filtered_data.to_csv(csv_path, index=False)
+    save_filtered_models(
+        df=df_forecasts,
+        filtered_mask=~mask,
+        columns=[
+            "model",
+            "forecast_due_date",
+            "round_imputed_rate_dataset",
+            "round_imputed_rate_market",
+        ],
+        sort_by=["model", "forecast_due_date"],
+        filename="filtered_models_imputation_market_dataset.csv",
+    )
 
     df_forecasts = df_forecasts[mask]
 
     print(
         f"After removing models with >{imputation_threshold*100}% "
-        f"imputed: {df_forecasts.shape}"
+        f"imputed (at dataset & market levels): {df_forecasts.shape}"
     )
 
-    # Remove all combination questions (non-missing "direction")
-    mask = df_forecasts["direction"] == "[]"
-    df_forecasts = df_forecasts.loc[mask,].copy()
-    del df_forecasts["direction"]
-    print("After removing combo questions:{}".format(df_forecasts.shape))
-
-    # Remove all unresolved questions
+    # Step 4: Remove all unresolved questions
     mask = df_forecasts["resolved"]
     df_forecasts = df_forecasts.loc[mask,].copy()
     print("After removing unresolved questions:{}".format(df_forecasts.shape))
@@ -446,6 +532,7 @@ def process_parsed_data(
             "model_days_active",
             "model_days_active_market",
             "model_days_active_dataset",
+            "round_imputed_rate_overall",
             "round_imputed_rate_dataset",
             "round_imputed_rate_market",
             "imputed",
