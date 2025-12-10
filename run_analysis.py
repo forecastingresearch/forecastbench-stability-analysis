@@ -178,15 +178,16 @@ def main():
     df = pd.read_csv(f"{PROCESSED_FOLDER}/processed_data.csv")
 
     # Define leaderboard configurations
-    date_50d_before = pd.to_datetime(REFERENCE_DATE) - pd.Timedelta(days=50)
+    date_50d_before = (pd.to_datetime(REFERENCE_DATE) - pd.Timedelta(days=50)).strftime(
+        "%Y-%m-%d"
+    )
     leaderboard_config = [
         {
             "name": "leaderboard_50d_baseline.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" not in x)
                 & df["model"].apply(lambda x: "news" not in x)
-                & df["forecast_due_date"]
-                <= date_50d_before
+                & (df["forecast_due_date"] <= date_50d_before)
             ),
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
