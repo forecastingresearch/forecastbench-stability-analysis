@@ -136,6 +136,7 @@ def parse_forecast_data(base_dir: str = ".") -> pd.DataFrame:
                 # Process each forecast
                 for forecast in data.get("forecasts", []):
                     record = {
+                        "organization": data.get("organization", ""),
                         "model_organization": model_organization,
                         "model": model,
                         "id": forecast.get("id"),
@@ -505,6 +506,13 @@ def process_parsed_data(
         df_forecasts["model_days_active_dataset"],
     )
 
+    # For external models, use the first forecast date
+    # as the model release date
+    mask = df_forecasts["organization"] != "ForecastBench"
+    df_forecasts.loc[mask, "model_release_date"] = df_forecasts.loc[
+        mask, "model_first_forecast_date"
+    ]
+
     # Check if all models have release dates
     mask = df_forecasts["model_organization"] != "ForecastBench"
     if df_forecasts.loc[mask, "model_release_date"].isnull().any():
@@ -522,6 +530,7 @@ def process_parsed_data(
     # Select key columns & export
     df_forecasts = df_forecasts[
         [
+            "organization",
             "model_organization",
             "model",
             "model_release_date",
