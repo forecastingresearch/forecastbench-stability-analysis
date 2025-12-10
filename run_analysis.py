@@ -61,7 +61,7 @@ def generate_leaderboard(
 # =====================================================
 
 # Date of "now" for calculating days active on ForecastBench
-REFERENCE_DATE = "2025-09-29"
+REFERENCE_DATE = "2025-12-10"
 
 # Maximum allowed fraction of imputed forecasts per model
 IMPUTATION_THRESHOLD = 0.05
@@ -178,12 +178,15 @@ def main():
     df = pd.read_csv(f"{PROCESSED_FOLDER}/processed_data.csv")
 
     # Define leaderboard configurations
+    date_50d_before = pd.to_datetime(REFERENCE_DATE) - pd.Timedelta(days=50)
     leaderboard_config = [
         {
             "name": "leaderboard_50d_baseline.csv",
             "mask": (
                 df["model"].apply(lambda x: "freeze" not in x)
                 & df["model"].apply(lambda x: "news" not in x)
+                & df["forecast_due_date"]
+                <= date_50d_before
             ),
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
@@ -193,7 +196,7 @@ def main():
         },
         {
             "name": "leaderboard_50d_tournament.csv",
-            "mask": None,
+            "mask": (df["forecast_due_date"] <= date_50d_before),
             "min_days_active_market": 50,
             "min_days_active_dataset": 50,
             "stability_analysis": True,
@@ -218,6 +221,16 @@ def main():
             "mask": None,
             "min_days_active_market": 50,
             "min_days_active_dataset": 7,
+            "stability_analysis": False,
+            "sample_size_analysis": False,
+            "generate_trendline_graph_data": True,
+            "exclude_tournament_models_in_2FE": True,
+        },
+        {
+            "name": "leaderboard_tournament_all_data.csv",
+            "mask": None,
+            "min_days_active_market": 0,
+            "min_days_active_dataset": 0,
             "stability_analysis": False,
             "sample_size_analysis": False,
             "generate_trendline_graph_data": True,
